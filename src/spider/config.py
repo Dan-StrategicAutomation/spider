@@ -18,19 +18,34 @@ class SpiderConfig(BaseSettings):
         extra="ignore",
     )
 
-    # LLM Configuration
-    openrouter_api_key: str = Field(default="", description="OpenRouter API key")
-    default_model: str = Field(
-        default="anthropic/claude-sonnet-4-5-20250929",
-        description="Default model for DSPy nodes",
-    )
+    # ── LLM Configuration ──────────────────────────────────────────────
+    # PRIMARY: Qwen3.5 Abliterated via Ollama (uncensored, local, fast)
+    # FALLBACK: OpenRouter cloud models (when local is unavailable)
+    
     ollama_base_url: str = Field(
         default="http://localhost:11434",
-        description="Ollama endpoint for local model fallback",
+        description="Ollama endpoint for primary model execution",
     )
-    local_model: str = Field(
-        default="qwen3:8b-instruct",
-        description="Local model for fallback processing",
+    
+    # Primary agent model -- Qwen3.5 abliterated (uncensored for pentesting)
+    # Sizes available on Ollama: 0.8B(1GB), 2B(1.9GB), 4B(3.3GB), 9B(6.6GB), 27B(17GB), 35B(24GB)
+    # RTX 3070 Laptop (8GB VRAM): use 9B (6.6GB) for main agent
+    primary_model: str = Field(
+        default="huihui_ai/qwen3.5-abliterated:9b",
+        description="Primary Qwen3.5 abliterated model for DSPy nodes (Ollama)",
+    )
+    
+    # Self-evaluation model -- smaller is fine, runs alongside primary
+    eval_model: str = Field(
+        default="huihui_ai/qwen3.5-abliterated:4b",
+        description="Lighter model for self-evaluation and reward scoring (Ollama)",
+    )
+    
+    # Cloud fallback -- used only when Ollama is unavailable
+    openrouter_api_key: str = Field(default="", description="OpenRouter API key for cloud fallback")
+    fallback_model: str = Field(
+        default="anthropic/claude-sonnet-4-5-20250929",
+        description="Cloud model fallback when Ollama is unavailable",
     )
 
     # Safety Configuration

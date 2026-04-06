@@ -442,6 +442,24 @@ DSPyInstrumentor().instrument()
 
 ---
 
+## UX Design (METATRON-Style Interactive CLI)
+
+SPIDER's CLI follows the METATRON UX pattern (sooryathejas/METATRON, 1.2k stars):
+- Color-coded terminal output (RED/GREEN/YELLOW/BLUE/CYAN)
+- Numbered menu choices with clear labels
+- Interactive prompts with colored input lines
+- ASCII banners and dividers
+- Session history with scan IDs and risk levels
+- Export options for findings (JSON, PDF, HTML planned)
+- Edit/delete capabilities for individual findings
+
+The key improvement over METATRON:
+- SPIDER uses DSPy-native execution, not raw Ollama API calls
+- SPIDER learns and improves across sessions (GEPA/MIPROv2 optimization)
+- SPIDER uses Qwen3.5 Abliterated directly (no custom fine-tune needed)
+- SPIDER has parallel wave execution, not sequential tool calling
+- SPIDER stores knowledge in a learnable pattern library, not just records
+
 ## Documentation Structure
 
 All project documentation lives in `docs/`. Reference these files during development:
@@ -452,6 +470,7 @@ All project documentation lives in `docs/`. Reference these files during develop
 | [docs/dspy-engine.md](docs/dspy-engine.md) | DSPy engine internals: Weaver, Runner, Refine, self-evaluation |
 | [docs/tools.md](docs/tools.md) | Security tool catalog, custom tools, adapter pattern, registration |
 | [docs/parallelism.md](docs/parallelism.md) | Parallel execution: wave-based, async, multi-target parallelism |
+| [docs/advanced-dspy-design.md](docs/advanced-dspy-design.md) | GEPA, MIPROv2, learning pipeline, exploit discovery, optimization schedule |
 | [docs/safety.md](docs/safety.md) | Safety architecture: scope guards, HITL, sandbox, audit logging |
 | [docs/testing.md](docs/testing.md) | Testing methodology: lab setup, test targets, pipeline |
 | [docs/tui.md](docs/tui.md) | Terminal UI specification (Textual TUI) |
