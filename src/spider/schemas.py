@@ -5,7 +5,18 @@ Topology schemas (NodeDef, GraphTopology) also live here for centralization.
 """
 
 from enum import StrEnum
+
 from pydantic import BaseModel, Field, field_validator
+
+
+class ScanPhase(StrEnum):
+    RECON = "recon"
+    ENUM = "enum"
+    VULN_SCAN = "vuln_scan"
+    PLANNING = "planning"
+    EXECUTION = "execution"
+    POST_EXPLOIT = "post_exploit"
+    REPORTING = "reporting"
 
 
 # ── Recon Schemas ────────────────────────────────────────────────────────────

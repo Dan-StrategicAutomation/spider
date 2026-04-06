@@ -4,11 +4,11 @@ Every security tool goes through this adapter before execution.
 This ensures no tool can run out-of-scope or without being logged.
 """
 
-import dspy
 import functools
 import json
 import subprocess
-from datetime import datetime, timezone
+
+import dspy
 
 
 def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300):
