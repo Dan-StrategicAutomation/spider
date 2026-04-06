@@ -17,9 +17,14 @@ spider/
 ├── pyproject.toml                 # Dependencies, ruff, pytest, build config
 ├── AGENTS.md                      # This file -- mandatory for all AI agents
 ├── PLAN.md                        # Architecture and design plan
+├── Modelfile                      # Custom Ollama Modelfile (Qwen3.5 abliterated)
+├── .env.example                   # Environment variable template
 ├── src/spider/
-│   ├── __init__.py
+│   ├── __init__.py                # Package init
 │   ├── config.py                  # Pydantic Settings (SpiderConfig)
+│   ├── models.py                  # DSPy LM routing -- Qwen3.5 Abliterated primary
+│   ├── cli.py                     # METATRON-style interactive CLI entry point
+│   ├── banner.py                  # Verified ASCII banners (pyfiglet-generated)
 │   ├── schemas.py                 # Centralized Pydantic models (ALL structured data)
 │   │
 │   ├── engine/                    # DSPy Core -- Weaver, Runner, Refine loops
@@ -28,7 +33,7 @@ spider/
 │   │   ├── self_eval.py           # Pentest quality evaluator (dspy.Refine reward)
 │   │   └── orchestrator.py        # Top-level pipeline: Weaver->Provision->Runner->Heal
 │   │
-│   ├── nodes/                     # DSPy Node Modules (signatures + modules)
+│   ├── nodes/                     # DSPy Node Modules (signatures + modules) [TODO]
 │   │   ├── recon.py
 │   │   ├── enum.py
 │   │   ├── vuln_analysis.py
@@ -38,7 +43,8 @@ spider/
 │   │   └── reporter.py
 │   │
 │   ├── tools/                     # dspy.Tool wrappers for security tools
-│   │   ├── recon_tools.py         # nmap, masscan, amass, whois, dig
+│   │   ├── adapter.py             # Central tool registration + scope guard wrapper
+│   │   ├── recon_tools.py         # nmap, masscan, whois, dns_enum, subdomain_enum
 │   │   ├── enum_tools.py          # gobuster, ffuf, nikto, enum4linux
 │   │   ├── vuln_scanners.py       # nuclei, nmap NSE, trivy
 │   │   ├── cve_intelligence.py    # CUSTOM: NVD + CISA KEV + EPSS
@@ -46,8 +52,7 @@ spider/
 │   │   ├── payload_gen.py         # CUSTOM: Adaptive payload generation
 │   │   ├── attack_chain.py        # CUSTOM: Multi-step attack chain builder
 │   │   ├── exploitation.py        # sqlmap, hydra, metasploit (HITL-gated)
-│   │   ├── post_exploit_tools.py  # bloodhound, crackmapexec, responder
-│   │   └── adapter.py             # dspy.Tool registration adapter
+│   │   └── post_exploit_tools.py  # bloodhound, crackmapexec, responder
 │   │
 │   ├── sandbox/                   # Safe execution environment
 │   │   ├── docker_env.py          # Kali Docker sandbox management
@@ -61,18 +66,29 @@ spider/
 │   │   ├── kev.py                 # CISA Known Exploited Vulnerabilities
 │   │   └── epss.py                # EPSS exploit probability scoring
 │   │
-│   └── tui/                       # Textual terminal UI
-│       ├── app.py
-│       ├── dashboard.py
-│       ├── findings.py
-│       ├── attack_graph.py
-│       ├── hitl_dialog.py
-│       └── report_view.py
+│   ├── tui/                       # Textual terminal UI [TODO]
+│   │   ├── app.py
+│   │   ├── dashboard.py
+│   │   ├── findings.py
+│   │   ├── attack_graph.py
+│   │   ├── hitl_dialog.py
+│   │   └── report_view.py
+│   │
+│   └── testing/                   # Test lab integration helpers [TODO]
 │
-├── tests/                         # Pytest suite
-├── lab/                           # Docker Compose test lab
+├── tests/                         # Pytest suite [TODO]
+├── lab/                           # Docker Compose test lab [TODO]
 │   └── docker-compose.yml         # DVWA + Juice Shop + Metasploitable2
 └── docs/                          # Documentation
+    ├── index.md                   # Documentation index
+    ├── architecture.md            # System design, DSPy graph topology
+    ├── dspy-engine.md             # Weaver, Runner, Refine, self-evaluation
+    ├── advanced-dspy-design.md    # GEPA, MIPROv2, learning pipeline, exploit discovery
+    ├── parallelism.md             # Wave-based parallelism, async execution
+    ├── tools.md                   # Security tool catalog, custom tools
+    ├── safety.md                  # Safety architecture, scope guards, HITL
+    ├── testing.md                 # Test methodology, lab setup
+    └── tui.md                     # Terminal UI spec (Textual TUI)
 ```
 
 ---
@@ -83,10 +99,7 @@ spider/
 Breaks DSPy type introspection and Pydantic forward reference resolution.
 Use TYPE_CHECKING guards for forward refs if needed.
 
-### 2. NEVER use `from __future__ import annotations`
-It breaks DSPy signature introspection.
-
-### 3. Always use Pydantic BaseModel in DSPy Signatures
+### 2. Always use Pydantic BaseModel in DSPy Signatures
 Every `dspy.InputField()` and `dspy.OutputField()` carrying structured data
 MUST use a typed Pydantic `BaseModel`. Never use raw types (`str`, `float`,
 `list[dict]`) in signatures. DSPy serializes to JSON schema and parses
@@ -104,7 +117,7 @@ class ReconSignature(dspy.Signature):
     findings: ReconResults = dspy.OutputField()
 ```
 
-### 4. Use `dspy.Refine(module, N, reward_fn, threshold)` for ALL retry/self-improvement
+### 3. Use `dspy.Refine(module, N, reward_fn, threshold)` for ALL retry/self-improvement
 NEVER write Python `for attempt in range(N): try/except` loops. DSPy's Refine
 handles retries with different rollout IDs automatically.
 
@@ -126,50 +139,58 @@ self.agent = dspy.Refine(
 )
 ```
 
-### 5. NEVER post-process LLM outputs
+### 4. NEVER post-process LLM outputs
 If the LLM generates invalid output, Pydantic rejects it and `dspy.Refine`
 retries. Post-processing masks root cause prompting issues.
 
-### 6. ALWAYS use f-strings
+### 5. ALWAYS use f-strings
 ```python
 f"Scan result: {len(findings.hosts)} hosts found"  # GOOD
 "Scan result: {} hosts found".format(len(findings.hosts))  # BAD
 ```
 
-### 7. Centralize ALL Pydantic schemas in `schemas.py`
+### 6. Centralize ALL Pydantic schemas in `schemas.py`
 No ad-hoc models scattered across modules. Topology schemas can stay in
 `nodes/` if they're signature-specific, but all shared data models go in
 `schemas.py`.
 
-### 8. Use `pydantic-settings` for configuration
+### 7. Use `pydantic-settings` for configuration
 ```python
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class SpiderConfig(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="SPIDER_")
-    openrouter_api_key: str
+    # Qwen3.5 Abliterated (primary -- runs on Ollama)
+    primary_model: str = "huihui_ai/qwen3.5-abliterated:9b"
+    eval_model: str = "huihui_ai/qwen3.5-abliterated:4b"
     ollama_base_url: str = "http://localhost:11434"
-    model: str = "anthropic/claude-sonnet-4-5-20250929"
+    # Cloud fallback
+    openrouter_api_key: str = ""
+    fallback_model: str = "anthropic/claude-sonnet-4-5-20250929"
+    # Safety
+    allowed_targets: list[str] = []
+    excluded_targets: list[str] = ["0.0.0.0", "127.0.0.1", "localhost"]
     lab_targets: list[str] = ["dvwa", "juice-shop", "metasploitable2"]
 ```
 
-### 9. All tools MUST return JSON strings for DSPy compatibility
+### 8. All tools MUST return JSON strings for DSPy compatibility
 ```python
 def nmap_scan(target: str, ports: str = "-T4 -sV") -> str:
     result = _run_nmap(target, ports)
     return json.dumps({"success": True, "result": result})
 ```
 
-### 10. Tools MUST have docstrings and type hints
+### 9. Tools MUST have docstrings and type hints
 DSPy's tool inspection reads docstrings and parameter types to build
 schemas for the LLM. Vague docstrings break tool calling.
 
 ```python
-def cve_intelligence(service: str, version: str, cpe: str = "") -> list[CVEFinding]:
-    """Look up known CVEs for a service/version across NVD, CISA KEV, and EPSS.
-    Returns prioritized vulnerability findings with exploit availability
-    indicators and severity scores. Used for vulnerability analysis phase.
-    """
+def cve_intelligence(service: str, version: str, cpe: str = "") -> str:
+    \"\"\"Look up known CVEs for a service/version across NVD, CISA KEV, and EPSS.
+    Returns a JSON string of prioritized vulnerability findings with exploit
+    availability indicators and severity scores.
+    \"\"\"
+    return json.dumps({"cves": [], "total": 0})
 ```
 
 ---
@@ -208,9 +229,9 @@ class VulnAnalysisModule(dspy.Module):
 ### Reward Function Signature
 ```python
 def reward_fn(args: dict, pred: dspy.Prediction) -> float:
-    # args: the input arguments dict passed to forward()
-    # pred: the DSPy Prediction object with output fields
-    # Returns: float 0.0 to 1.0
+    # args: the input arguments dict passed to the module's forward()
+    # pred: the DSPy Prediction object with output fields from the wrapped module
+    # Returns: float 0.0 to 1.0 quality score
     return score
 ```
 
@@ -403,24 +424,44 @@ disabled on lab network.
 
 ## LM CONFIGURATION
 
-```python
-# Primary: OpenRouter
-import dspy
-lm = dspy.LM(
-    model="openrouter/anthropic/claude-sonnet-4-5-20250929",
-    api_key=os.environ["SPIDER_OPENROUTER_API_KEY"]
-)
+SPIDER uses **Qwen3.5 Abliterated on Ollama** as the primary model.
+Cloud models are only a fallback when Ollama is unavailable.
 
-# Local fallback: Ollama
-if not os.environ.get("SPIDER_OPENROUTER_API_KEY"):
-    lm = dspy.LM(
-        model="qwen3:8b-instruct",
-        api_base="http://localhost:11434",
-        api_key="",  # empty for Ollama
-    )
+```python
+from spider.config import SpiderConfig
+from spider.models import get_lm
+
+config = SpiderConfig()
+
+# Primary: Qwen3.5 Abliterated via Ollama (local, uncensored)
+lm = get_lm(config, role="primary")    # 9B model, 6.6GB VRAM
+eval_lm = get_lm(config, role="eval")   # 4B model, 3.3GB VRAM
 
 dspy.configure(lm=lm)
 ```
+
+Manual Ollama LM creation (if not using the models.py router):
+
+```python
+import dspy
+
+# Ollama -- api_key must be empty string
+lm = dspy.LM(
+    model="huihui_ai/qwen3.5-abliterated:9b",
+    api_base="http://localhost:11434",
+    api_key="",  # REQUIRED: empty string for Ollama
+)
+dspy.configure(lm=lm)
+```
+
+### Model Selection Guide
+
+| Scenario | Model | VRAM | Use |
+|----------|-------|------|-----|
+| RTX 3070 (8GB) | `huihui_ai/qwen3.5-abliterated:9b` | 6.6GB | Primary agent for all DSPy nodes |
+| Fast eval | `huihui_ai/qwen3.5-abliterated:4b` | 3.3GB | Self-evaluation, reward scoring |
+| Heavy reasoning | `huihui_ai/qwen3.5-abliterated:27b` | 17GB | Attack chain building (more VRAM needed) |
+| Cloud fallback | `anthropic/claude-sonnet-4-5-20250929` | N/A | When Ollama is unavailable |
 
 ---
 
