@@ -167,7 +167,7 @@ def recon_reward(args: dict, pred: dspy.Prediction) -> float:
 def vuln_reward(args: dict, pred: dspy.Prediction) -> float:
     vulns = pred.vulnerabilities
     if not vulns: return 0.0
-    score = min(1.0, len(vulns) * 0.1)
+        score = min(0.7, len(vulns) * 0.1)
     # Bonus for CVSS scores
     if any(v.cvss_score > 7.0 for v in vulns): score += 0.2
     # Bonus for exploit availability

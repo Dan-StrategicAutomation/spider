@@ -88,7 +88,7 @@ Cross-references three intelligence sources in parallel:
 - **CISA KEV**: Known Exploited Vulnerabilities (actively exploited in the wild)
 - **EPSS**: Exploit Prediction Scoring System (probability of exploitation in next 30 days)
 
-Returns `list[CVEFinding]` with prioritized vulnerabilities.
+Returns JSON string (deserializes to `list[CVEFinding]`). All tools return JSON for DSPy compatibility.
 
 ```python
 class CVEFinding(BaseModel):

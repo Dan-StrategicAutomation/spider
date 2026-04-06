@@ -140,7 +140,7 @@ executes. Quality scoring is deterministic and configurable.
 | `runner.py` | Wave-based parallel GraphRunner |
 | `self_eval.py` | Pentest quality evaluator |
 | `orchestrator.py` | Top-level pipeline |
-| `provision.py` | Runtime tool provisioning and LM configuration |
+| (provisioning handled in orchestrator.py) | `_provision_tools()` method |
 
 See [DSPy Engine](dspy-engine.md) for details.
 

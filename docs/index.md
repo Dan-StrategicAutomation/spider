@@ -1,15 +1,16 @@
 # SPIDER Documentation Index
 
 ## Getting Started
+- [Quick Start](quickstart.md) - Initial setup, pull models, first run
 - [Architecture Overview](architecture.md) - DSPy graph topology, component design
 - [Development Guide](../AGENTS.md) - AI agent development rules and patterns
-- [Quick Start](quickstart.md) - Initial setup, first run, configuration
 
 ## Core Components
 - [DSPy Engine](dspy-engine.md) - Weaver, Runner, Refine patterns, self-evaluation
+- [Advanced DSPy Design](advanced-dspy-design.md) - GEPA, MIPROv2, learning pipeline, exploit discovery
+- [Parallel Execution](parallelism.md) - Wave-based parallelism, async execution, performance targets
 - [Security Tools](tools.md) - Tool catalog, custom tools, integration guide
 - [Threat Intelligence](intelligence.md) - CVE database, exploit matching, EPSS scoring
-- [Parallel Execution](parallelism.md) - Wave-based parallelism, async execution, performance targets
 
 ## Safety & Security
 - [Safety Architecture](safety.md) - Scope guards, HITL gates, sandbox isolation, auditing
@@ -20,3 +21,4 @@
 
 ## Reference
 - [Plan and Roadmap](../PLAN.md) - Architecture plan, implementation phases
+- [README](../README.md) - Public-facing project overview
