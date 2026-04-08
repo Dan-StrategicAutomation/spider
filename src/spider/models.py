@@ -81,12 +81,11 @@ def get_lm(config: SpiderConfig, role: str = "primary") -> dspy.LM:
             api_key=config.openrouter_api_key,
         )
 
-    # Ollama model -- LiteLLM requires "ollama/" prefix
+    # Ollama model -- LiteLLM routes via "ollama/" prefix
     litellm_model = model_name.lstrip("ollama/")
     return dspy.LM(
         model=f"ollama/{litellm_model}",
         api_base=config.ollama_base_url,
-        api_key="",
     )
 
 
