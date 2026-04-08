@@ -173,7 +173,7 @@ def new_scan(session_db, orchestrator):
     info(f"Goal: {goal[:80]}...")
 
     try:
-        result = orchestrator.forward(goal=goal, target=target)
+        result = orchestrator.run(goal=goal, target=target)
         success(f"Scan complete. Session ID: {session_id}")
 
         # Save results
