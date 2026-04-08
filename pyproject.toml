@@ -54,3 +54,7 @@ asyncio_mode = "auto"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/spider"]
+
+[tool.uv.sources]
+# Workspace sources: the project itself is always editable
+spider = { workspace = true }

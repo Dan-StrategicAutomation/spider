@@ -35,14 +35,14 @@ All on isolated bridge network. No external internet.
 
 ```bash
 # Full suite
-pytest tests/ -q
+uv run pytest tests/ -q
 
 # Safety tests first (MUST PASS)
-pytest tests/test_scopes/ -q
-pytest tests/test_sandbox/ -q
+uv run pytest tests/test_scopes/ -q
+uv run pytest tests/test_sandbox/ -q
 
 # Integration against lab
-pytest tests/test_integration/ -q
+uv run pytest tests/test_integration/ -q
 ```
 
 ## Expected Findings

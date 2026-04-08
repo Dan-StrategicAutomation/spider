@@ -82,21 +82,18 @@ Then set `SPIDER_PRIMARY_MODEL=spider-qwen35` in your `.env`.
 git clone https://github.com/Dan-StrategicAutomation/spider.git
 cd spider
 
-# 2. Create virtual environment
-python -m venv venv && source venv/bin/activate
+# 2. Install dependencies (requires uv -- https://docs.astral.sh/uv/getting-started/installation/)
+uv sync --all-extras
 
-# 3. Install
-pip install -e ".[dev]"
-
-# 4. Configure
+# 3. Configure
 cp .env.example .env
 # Edit .env and set your model + allowed targets
 
-# 5. Make sure Ollama is running
+# 4. Make sure Ollama is running
 ollama list  # Should show huihui_ai/qwen3.5-abliterated
 
-# 6. Launch SPIDER
-python -m spider.cli
+# 5. Launch SPIDER
+uv run spider
 ```
 
 ## Usage
@@ -107,12 +104,16 @@ SPIDER's CLI follows the METATRON UX pattern -- color-coded menus, numbered choi
 interactive prompts -- but with DSPy-native power:
 
 ```
-    ███████╗██████╗  ██████╗ ██████╗ ██╗   ██╗███╗   ██╗████████╗
-    ██╔════╝██╔══██╗██╔═══██╗██╔══██╗██║   ██║████╗  ██║╚══██╔══╝
-    ███████╗██████╔╝██║   ██║██████╔╝██║   ██║██╔██╗ ██║   ██║
-    ╚════██║██╔═══╝ ██║   ██║██╔══██╗██║   ██║██║╚██╗██║   ██║
-    ███████║██║     ╚██████╔╝██║  ██║╚██████╔╝██║ ╚████║   ██║
-    ╚══════╝╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
+
+    ######  ########  #### ########  ######## ########
+    ##    ## ##     ##  ##  ##     ## ##       ##     ##
+    ##       ##     ##  ##  ##     ## ##       ##     ##
+    ######  ########   ##  ##     ## ######   ########
+          ## ##         ##  ##     ## ##       ##   ##
+    ##    ## ##         ##  ##     ## ##       ##    ##
+    ######  ##        #### ########  ######## ##     ##
+
+
 
     DSPy-Native Pentesting Framework  |  Qwen3.5 Abliterated  |  Ollama
     ───────────────────────────────────────────────────────────────
@@ -198,13 +199,13 @@ Failed output triggers automatic retry with different rollout IDs.
 docker compose -f lab/docker-compose.yml up -d
 
 # Run the full test suite
-pytest tests/ -q
+uv run pytest tests/ -q
 
 # Run only safety tests (MUST PASS before any pentesting)
-pytest tests/test_safety/ -q
+uv run pytest tests/test_safety/ -q
 
 # Run integration tests against lab targets
-pytest tests/test_integration/ -q
+uv run pytest tests/test_integration/ -q
 ```
 
 ## License

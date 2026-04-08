@@ -1,29 +1,29 @@
 """SPIDER CLI -- main entry point with interactive pentest menus."""
 
+import argparse
+import json
 import os
 import sys
-import json
 from pathlib import Path
 
 from spider.config import SpiderConfig
-from spider.models import configure_spider, get_lm, _ollama_available
-from spider.sandbox.scope_guard import ScopeGuard
+from spider.engine.orchestrator import SpiderOrchestrator
+from spider.models import _ollama_available, configure_spider
 from spider.sandbox.audit_logger import AuditLogger
 from spider.sandbox.hitl_gate import HITLGate
-from spider.engine.orchestrator import SpiderOrchestrator
-
+from spider.sandbox.scope_guard import ScopeGuard
 
 # ── Colors ──────────────────────────────────────────────────────────────
 
-RED     = "\033[91m"
-GREEN   = "\033[92m"
-YELLOW  = "\033[93m"
-BLUE    = "\033[94m"
+RED = "\033[91m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+BLUE = "\033[94m"
 MAGENTA = "\033[95m"
-CYAN    = "\033[96m"
-DIM     = "\033[90m"
-BOLD    = "\033[1m"
-RESET   = "\033[0m"
+CYAN = "\033[96m"
+DIM = "\033[90m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
 
 
 # ── Banner ──────────────────────────────────────────────────────────────
@@ -82,12 +82,13 @@ def confirm(question) -> bool:
 
 # ── Initialization ──────────────────────────────────────────────────────
 
+
 def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
     """Initialize SPIDER configuration and orchestrator."""
     config = SpiderConfig()
 
     divider("INITIALIZATION")
-    info(f"Config loaded from .env / environment")
+    info("Config loaded from .env / environment")
     info(f"Models available: {len(config.available_tools)} tools registered")
 
     # Check Ollama
@@ -114,9 +115,7 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
         lab_network=config.lab_network,
     )
 
-    audit_logger = AuditLogger(
-        log_path=Path.home() / ".spider" / "audit.log"
-    )
+    audit_logger = AuditLogger(log_path=Path.home() / ".spider" / "audit.log")
 
     hitl_gate = HITLGate(interactive=True)
 
@@ -133,6 +132,7 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
 
 
 # ── New Scan ────────────────────────────────────────────────────────────
+
 
 def new_scan(session_db, orchestrator):
     """Run a new pentest scan against a target."""
@@ -193,6 +193,7 @@ def new_scan(session_db, orchestrator):
 
 # ── Show Findings ───────────────────────────────────────────────────────
 
+
 def show_findings(result):
     """Display pentest findings in a nice format."""
     divider("FINDINGS")
@@ -200,7 +201,7 @@ def show_findings(result):
     # This will show actual parsed results when nodes are implemented
     info("Scan results:")
     print(f"\n{BOLD}Session Results:{RESET}")
-    if hasattr(result, 'results'):
+    if hasattr(result, "results"):
         for key, val in result.results.items():
             print(f"  {CYAN}{key}{RESET}: {str(val)[:200]}")
     elif isinstance(result, dict):
@@ -209,6 +210,7 @@ def show_findings(result):
 
 
 # ── View History ────────────────────────────────────────────────────────
+
 
 def view_history(session_db):
     """View all past scan sessions."""
@@ -229,7 +231,9 @@ def view_history(session_db):
         risk = row.get("risk_level", "—")
 
         status_color = GREEN if status == "completed" else RED
-        print(f"  {sid:<6} {target:<20} {date:<20} {status_color}{status:<12}{RESET} {YELLOW}{risk:<10}{RESET}")
+        print(
+            f"  {sid:<6} {target:<20} {date:<20} {status_color}{status:<12}{RESET} {YELLOW}{risk:<10}{RESET}"
+        )
 
     divider()
     sid_str = prompt("Enter Session ID to view details (or press Enter to go back): ")
@@ -256,6 +260,7 @@ def view_history(session_db):
 
 # ── Pull Models ─────────────────────────────────────────────────────────
 
+
 def pull_models(config):
     """Pull required Qwen3.5 abliterated models from Ollama."""
     divider("PULL MODELS")
@@ -269,7 +274,8 @@ def pull_models(config):
     for model in models:
         info(f"Checking: {model}")
         # We'll use the models module to check and pull
-        from spider.models import pull_model, _is_model_pulled
+        from spider.models import _is_model_pulled, pull_model
+
         if _is_model_pulled(model, config.ollama_base_url):
             success(f"  Already downloaded: {model}")
         else:
@@ -284,6 +290,7 @@ def pull_models(config):
 
 # ── Session Database (SQLite) ───────────────────────────────────────────
 
+
 class SessionDB:
     """SQLite session store for pentest results."""
 
@@ -294,6 +301,7 @@ class SessionDB:
 
     def _init_db(self):
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         c = conn.cursor()
         c.executescript("""
@@ -311,12 +319,10 @@ class SessionDB:
 
     def create_session(self, target: str) -> int:
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         c = conn.cursor()
-        c.execute(
-            "INSERT INTO sessions (target, status) VALUES (?, 'active')",
-            (target,)
-        )
+        c.execute("INSERT INTO sessions (target, status) VALUES (?, 'active')", (target,))
         conn.commit()
         sid = c.lastrowid
         conn.close()
@@ -324,29 +330,29 @@ class SessionDB:
 
     def save_results(self, session_id: int, result):
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         c = conn.cursor()
         results_json = json.dumps(result, default=str)
         c.execute(
             "UPDATE sessions SET status='completed', findings=? WHERE id=?",
-            (results_json, session_id)
+            (results_json, session_id),
         )
         conn.commit()
         conn.close()
 
     def update_status(self, session_id: int, status: str):
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         c = conn.cursor()
-        c.execute(
-            "UPDATE sessions SET status=? WHERE id=?",
-            (status, session_id)
-        )
+        c.execute("UPDATE sessions SET status=? WHERE id=?", (status, session_id))
         conn.commit()
         conn.close()
 
     def get_all_sessions(self) -> list[dict]:
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -357,6 +363,7 @@ class SessionDB:
 
     def find_by_target(self, target: str) -> list[dict]:
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -367,6 +374,7 @@ class SessionDB:
 
     def get_session(self, session_id: int) -> dict | None:
         import sqlite3
+
         conn = sqlite3.connect(self._db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -383,6 +391,7 @@ class SessionDB:
 
 
 # ── Main Menu ───────────────────────────────────────────────────────────
+
 
 def main_menu(session_db, config, orchestrator):
     while True:
@@ -407,7 +416,9 @@ def main_menu(session_db, config, orchestrator):
             print(f"  Primary model:  {CYAN}{config.primary_model}{RESET}")
             print(f"  Eval model:     {CYAN}{config.eval_model}{RESET}")
             print(f"  Ollama URL:     {CYAN}{config.ollama_base_url}{RESET}")
-            print(f"  Allowed targets: {CYAN}{', '.join(config.allowed_targets) or 'None (unrestricted)'}{RESET}")
+            print(
+                f"  Allowed targets: {CYAN}{', '.join(config.allowed_targets) or 'None (unrestricted)'}{RESET}"
+            )
             print(f"  Excluded targets: {CYAN}{', '.join(config.excluded_targets)}{RESET}")
             input(f"\n{DIM}Press Enter to continue...{RESET}")
         elif choice == "5":
@@ -419,11 +430,41 @@ def main_menu(session_db, config, orchestrator):
 
 # ── Entry Point ─────────────────────────────────────────────────────────
 
+
 def main():
-    banner()
-    print(f"  {DIM}Initializing...{RESET}")
+    parser = argparse.ArgumentParser(
+        prog="spider",
+        description="SPIDER -- Symbiotic Pentesting Investigation & DSPy Exploitation Runtime",
+    )
+    parser.add_argument(
+        "--scan",
+        metavar="TARGET",
+        help="Run a single scan against TARGET",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["recon", "full"],
+        default="recon",
+        help="Scan mode (default: recon)",
+    )
+    args = parser.parse_args()
 
     session_db = SessionDB()
+
+    if args.scan:
+        # Single-scan mode (non-interactive)
+        banner()
+        print(f"  {DIM}Initializing...{RESET}")
+        try:
+            config, orchestrator = init_spider()
+        except Exception as e:
+            error(f"Failed to initialize: {e}")
+            sys.exit(1)
+        new_scan(session_db, orchestrator)
+        return
+
+    banner()
+    print(f"  {DIM}Initializing...{RESET}")
 
     try:
         config, orchestrator = init_spider()

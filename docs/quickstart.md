@@ -9,11 +9,10 @@
 ## Setup
 
 ```bash
-# Clone and install
+# Clone and install (requires uv -- https://docs.astral.sh/uv/getting-started/installation/)
 git clone https://github.com/Dan-StrategicAutomation/spider.git
 cd spider
-python -m venv venv && source venv/bin/activate
-pip install -e ".[dev]"
+uv sync --all-extras
 
 # Pull models
 ollama pull huihui_ai/qwen3.5-abliterated:9b
@@ -27,7 +26,7 @@ cp .env.example .env
 ## First Run
 
 ```bash
-python -m spider.cli
+uv run spider
 ```
 
 1. Select `[1] New Scan`

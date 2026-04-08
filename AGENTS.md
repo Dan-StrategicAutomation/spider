@@ -370,20 +370,31 @@ Immutable append-only log of every action:
 
 ## TESTING REQUIREMENTS
 
+### Environment Management
+SPIDER uses `uv` for package management. All commands should be run through `uv run`:
+
+```bash
+uv sync --all-extras                # Install/update dependencies
+uv run pytest tests/ -q             # Run tests in the managed environment
+uv run ruff check src/ tests/       # Lint
+uv run ruff format src/ tests/      # Format
+uv run spider                       # Launch the CLI
+```
+
 ### ruff for linting/formatting
 ```bash
-ruff check src/ tests/
-ruff format src/ tests/
+uv run ruff check src/ tests/
+uv run ruff format src/ tests/
 ```
 
 ### pytest for testing
 ```bash
-pytest tests/ -q                    # Full suite
-pytest tests/test_scopes/ -q        # Scope guard tests (MUST PASS)
-pytest tests/test_sandbox/ -q       # Sandbox isolation tests
-pytest tests/test_tools/ -q         # Tool wrapper tests
-pytest tests/test_nodes/ -q         # DSPy node module tests
-pytest tests/test_integration/ -q   # Lab target integration tests
+uv run pytest tests/ -q                    # Full suite
+uv run pytest tests/test_scopes/ -q        # Scope guard tests (MUST PASS)
+uv run pytest tests/test_sandbox/ -q       # Sandbox isolation tests
+uv run pytest tests/test_tools/ -q         # Tool wrapper tests
+uv run pytest tests/test_nodes/ -q         # DSPy node module tests
+uv run pytest tests/test_integration/ -q   # Lab target integration tests
 ```
 
 ### NEVER commit untested code
