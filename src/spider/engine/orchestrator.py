@@ -158,11 +158,15 @@ class SpiderOrchestrator:
         session_id = f"run_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
         # Phase 1: Weave topology from goal and target
+        tool_names = ", ".join(
+            self._build_tools(scope_guard=self.scope_guard, audit_logger=self.audit_logger).keys()
+        )
         with dspy.settings.context(temperature=0.1):
             topology = self.weaver.weave(
                 goal=goal,
-                target=target,
-                constraints=self.config.rules_of_engagement,
+                target_info=target,
+                constraints_text=self.config.rules_of_engagement,
+                available_tools=tool_names,
             )
 
         # Phase 2: Provision tools
@@ -235,10 +239,16 @@ class SpiderOrchestrator:
             )
 
             with dspy.settings.context(temperature=0.4):
+                tool_names = ", ".join(
+                    self._build_tools(
+                        scope_guard=self.scope_guard, audit_logger=self.audit_logger
+                    ).keys()
+                )
                 new_topology = self.weaver.weave(
                     goal=goal,
-                    target=kwargs.get("target", ""),
-                    constraints=self.config.rules_of_engagement,
+                    target_info=kwargs.get("target", ""),
+                    constraints_text=self.config.rules_of_engagement,
+                    available_tools=tool_names,
                     previous_result=str(current_result),
                     feedback=feedback,
                 )

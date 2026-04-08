@@ -4,8 +4,9 @@ PRIMARY: Qwen3.5 Abliterated via Ollama (uncensored, local, fits your 3070)
 FALLBACK: OpenRouter cloud models (when Ollama is unavailable)
 """
 
-import dspy
 import subprocess
+
+import dspy
 
 from spider.config import SpiderConfig
 
@@ -14,6 +15,7 @@ def _ollama_available(base_url: str = "http://localhost:11434") -> bool:
     """Check if Ollama is running and responding."""
     try:
         import requests
+
         resp = requests.get(f"{base_url.rstrip('/')}/api/tags", timeout=5)
         return resp.status_code == 200
     except Exception:
@@ -24,6 +26,7 @@ def _is_model_pulled(model_name: str, base_url: str = "http://localhost:11434") 
     """Check if a model is already downloaded in Ollama."""
     try:
         import requests
+
         resp = requests.get(f"{base_url.rstrip('/')}/api/tags", timeout=5)
         if resp.status_code != 200:
             return False
@@ -38,10 +41,7 @@ def pull_model(model_name: str, base_url: str = "http://localhost:11434") -> boo
     if _is_model_pulled(model_name, base_url):
         return True  # Already have it
     try:
-        subprocess.run(
-            ["ollama", "pull", model_name],
-            capture_output=True, text=True, timeout=3600
-        )
+        subprocess.run(["ollama", "pull", model_name], capture_output=True, text=True, timeout=3600)
         return True
     except Exception:
         return False
@@ -81,9 +81,10 @@ def get_lm(config: SpiderConfig, role: str = "primary") -> dspy.LM:
             api_key=config.openrouter_api_key,
         )
 
-    # Ollama model -- api_key must be empty string
+    # Ollama model -- LiteLLM requires "ollama/" prefix
+    litellm_model = model_name.lstrip("ollama/")
     return dspy.LM(
-        model=model_name,
+        model=f"ollama/{litellm_model}",
         api_base=config.ollama_base_url,
         api_key="",
     )
@@ -115,11 +116,11 @@ def configure_spider(config: SpiderConfig) -> dspy.LM:
 #   - 122B Q4 (81GB) = maximum quality (multiple GPUs needed)
 
 MODEL_VRAM_REQUIREMENTS = {
-    "huihui_ai/qwen3.5-abliterated:0.8B": 1.0,   # 1 GB Q4
-    "huihui_ai/qwen3.5-abliterated:2B": 1.9,     # 1.9 GB Q4
-    "huihui_ai/qwen3.5-abliterated:4B": 3.3,     # 3.3 GB Q4
-    "huihui_ai/qwen3.5-abliterated:9b": 6.6,     # 6.6 GB Q4 <-- primary for 3070
-    "huihui_ai/qwen3.5-abliterated:27b": 17.0,   # 17 GB Q4
-    "huihui_ai/qwen3.5-abliterated:35b": 24.0,   # 24 GB Q4
+    "huihui_ai/qwen3.5-abliterated:0.8B": 1.0,  # 1 GB Q4
+    "huihui_ai/qwen3.5-abliterated:2B": 1.9,  # 1.9 GB Q4
+    "huihui_ai/qwen3.5-abliterated:4B": 3.3,  # 3.3 GB Q4
+    "huihui_ai/qwen3.5-abliterated:9b": 6.6,  # 6.6 GB Q4 <-- primary for 3070
+    "huihui_ai/qwen3.5-abliterated:27b": 17.0,  # 17 GB Q4
+    "huihui_ai/qwen3.5-abliterated:35b": 24.0,  # 24 GB Q4
     "huihui_ai/qwen3.5-abliterated:122B": 81.0,  # 81 GB Q4
 }
