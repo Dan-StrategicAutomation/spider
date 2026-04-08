@@ -141,7 +141,32 @@ Mode: 2
 ──────────────────── SCANNING ─────────────────────
 [*] Target: 192.168.1.100
 [*] Goal: Perform a full penetration test against 192.168.1.100...
+
+[>] Generating attack topology with DSPy weaver...
+    [*] Evaluating topology draft...
+    [*]   Draft valid: 6 waves, 8 nodes
+    [+]   Draft topology quality score: 0.85
+[+] Topology woven: 8 nodes, 10 edges
+
+[*] Provisioning 12 security tools...
+[+] Tools ready: nmap_scan, gobuster_scan, nuclei_scan, ...
+
+[*] Building 8 DSPy node modules...
+[+] Node modules ready
+
+[*] Running pipeline: recon -> web_enum -> vuln_analysis -> ...
+    [>] Executing wave: recon
+    [>]   LLM running: recon
+    [+]   recon complete -> recon_results
+    [>] Executing wave: web_enum, service_enum
+    ...
+[+] All nodes executed
+
+[*] Evaluating output quality...
+[+] Quality 0.82 meets threshold -- no healing needed
+[+] Scan complete
 ```
+
 
 ### Scan Modes
 

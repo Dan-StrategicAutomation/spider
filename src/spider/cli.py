@@ -12,6 +12,8 @@ from spider.models import _ollama_available, configure_spider
 from spider.sandbox.audit_logger import AuditLogger
 from spider.sandbox.hitl_gate import HITLGate
 from spider.sandbox.scope_guard import ScopeGuard
+from spider.schemas import validate_target_syntax
+import questionary
 
 # ── Colors ──────────────────────────────────────────────────────────────
 
@@ -80,6 +82,23 @@ def confirm(question) -> bool:
     return ans == "y"
 
 
+def cli_progress(step: str, detail: str):
+    """Callback for engine progress reporting."""
+    icon = f"{BLUE}[*]{RESET}"
+    if "done" in step or "complete" in step or "ready" in step:
+        icon = f"{GREEN}[+]{RESET}"
+    elif "fail" in step or "error" in step:
+        icon = f"{RED}[✗]{RESET}"
+    elif "running" in step or "execute" in step or "weave" in step or "heal" in step:
+        icon = f"{YELLOW}[>]{RESET}"
+    
+    # Indent sub-steps (node results)
+    if "node_" in step or step == "wave":
+        print(f"    {icon} {detail}")
+    else:
+        print(f"{icon} {detail}")
+
+
 # ── Initialization ──────────────────────────────────────────────────────
 
 
@@ -125,6 +144,7 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
         scope_guard=scope_guard,
         audit_logger=audit_logger,
         hitl_gate=hitl_gate,
+        progress_fn=cli_progress,
     )
 
     success("SPIDER initialized successfully")
@@ -134,12 +154,73 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
 # ── New Scan ────────────────────────────────────────────────────────────
 
 
-def new_scan(session_db, orchestrator):
-    """Run a new pentest scan against a target."""
+def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "recon"):
+    """Run a single scan non-interactively (used by --scan flag)."""
     divider("NEW SCAN")
-    target = prompt("[?] Enter target IP or domain: ")
+    info(f"Target: {target}")
+
+    # Check if target was scanned before
+    past = session_db.find_by_target(target)
+    if past:
+        warn(f"Target '{target}' has been scanned before ({len(past)} time(s)).")
+
+    # Create session
+    session_id = session_db.create_session(target)
+    success(f"Session created — ID {session_id}")
+
+    # Build goal from mode
+    if mode == "full":
+        goal = f"Perform a full penetration test against {target}. Discover vulnerabilities, build attack chains, and exploit them with human approval. Generate a complete report."
+    else:
+        goal = f"Perform comprehensive reconnaissance against {target}. Discover all hosts, ports, services, and technologies. Identify the attack surface."
+
+    divider("SCANNING")
+    info(f"Goal: {goal[:80]}...")
+
+    try:
+        result = orchestrator.run(goal=goal, target=target)
+        success(f"Scan complete. Session ID: {session_id}")
+
+        # Save results
+        session_db.save_results(session_id, result)
+        success(f"Results saved to session {session_id}")
+
+        # Show findings summary
+        divider("FINDINGS")
+        info("Scan results:")
+        print(f"\n{BOLD}Session Results:{RESET}")
+        if isinstance(result, dict):
+            for key, val in result.items():
+                if key in ("session_id", "target", "goal", "topology"):
+                    continue
+                print(f"  {CYAN}{key}{RESET}: {str(val)[:200]}")
+        elif hasattr(result, "results"):
+            for key, val in result.results.items():
+                print(f"  {CYAN}{key}{RESET}: {str(val)[:200]}")
+
+    except Exception as e:
+        error(f"Scan failed: {e}")
+        session_db.update_status(session_id, "failed")
+
+    divider()
+
+
+def new_scan(session_db, orchestrator):
+    """Run a new pentest scan against a target (interactive)."""
+    divider("NEW SCAN")
+    
+    def target_validator(text):
+        if validate_target_syntax(text):
+            return True
+        return "Invalid format: Enter a valid IP address or domain name (e.g., 127.0.0.1 or target.com)."
+
+    target = questionary.text(
+        "Enter target IP or domain:",
+        validate=target_validator
+    ).ask()
+
     if not target:
-        warn("No target entered.")
+        # User cancelled (e.g. Ctrl-C)
         return
 
     # Check if target was scanned before
@@ -460,7 +541,7 @@ def main():
         except Exception as e:
             error(f"Failed to initialize: {e}")
             sys.exit(1)
-        new_scan(session_db, orchestrator)
+        run_scan_noninteractive(session_db, orchestrator, target=args.scan, mode=args.mode)
         return
 
     banner()

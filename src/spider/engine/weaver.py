@@ -4,6 +4,8 @@ Takes a pentest goal and produces a validated DAG of nodes.
 Uses dspy.Refine with structural + quality reward for automatic retry.
 """
 
+from typing import Callable
+
 import dspy
 
 from spider.schemas import GraphTopology, TopologyScore, NodeDef, EdgeDef, NodeRole
@@ -16,6 +18,7 @@ class TopologyEvalSignature(dspy.Signature):
     - Every node has inputs satisfied by upstream node outputs
     - At least 3 nodes for a meaningful pentest
     - HITL gate flags set on exploitation nodes"""
+
     goal: str = dspy.InputField()
     topology_json: str = dspy.InputField()
     evaluation: TopologyScore = dspy.OutputField()
@@ -23,6 +26,7 @@ class TopologyEvalSignature(dspy.Signature):
 
 class TopologyEvaluator(dspy.Module):
     """DSPy-native topology quality checker."""
+
     def __init__(self):
         super().__init__()
         self.judge = dspy.ChainOfThought(TopologyEvalSignature)
@@ -37,6 +41,7 @@ class GraphWeaverSignature(dspy.Signature):
     role: react (recon always starts with active tool-using reconnaissance).
     CRITICAL -- Must be a DAG. NO cycles. Edges flow FORWARD only.
     Include HITL nodes for exploitation steps."""
+
     goal: str = dspy.InputField()
     target_info: str = dspy.InputField()
     constraints_text: str = dspy.InputField()
@@ -46,26 +51,33 @@ class GraphWeaverSignature(dspy.Signature):
 
 class GraphWeaver(dspy.Module):
     """DSPy-native self-improving pentest topology weaver."""
-    def __init__(self, max_nodes: int = 8):
+
+    def __init__(self, max_nodes: int = 8, progress_fn: Callable | None = None):
         super().__init__()
         self.max_nodes = max_nodes
+        self.progress_fn = progress_fn or (lambda _s, _d="": None)
         base_weave = dspy.ChainOfThought(GraphWeaverSignature)
         topology_eval = TopologyEvaluator()
 
         def topology_reward(args: dict, pred: dspy.Prediction) -> float:
+            self.progress_fn("weave_attempt", "Evaluating topology draft...")
             topo = pred.topology
             if not topo or not topo.nodes:
+                self.progress_fn("weave_attempt", "  Draft rejected: no nodes")
                 return 0.0
             # Structural validation
             try:
-                topo.topological_waves()
-            except ValueError:
-                return 0.0  # Cycle detected
+                waves = topo.topological_waves()
+                self.progress_fn(
+                    "weave_attempt", f"  Draft valid: {len(waves)} waves, {len(topo.nodes)} nodes"
+                )
+            except ValueError as e:
+                self.progress_fn("weave_attempt", f"  Draft rejected: cycle detected")
+                return 0.0
             # Quality validation
-            return topology_eval(
-                goal=args.get("goal", ""),
-                topology_json=topo.model_dump_json()
-            )
+            score = topology_eval(goal=args.get("goal", ""), topology_json=topo.model_dump_json())
+            self.progress_fn("weave_eval", f"  Draft topology quality score: {score:.2f}")
+            return score
 
         self.weave = dspy.Refine(
             module=base_weave,
@@ -74,9 +86,12 @@ class GraphWeaver(dspy.Module):
             threshold=0.8,
         )
 
-    def forward(self, goal: str, **kwargs) -> dspy.Prediction:
+    def forward(self, goal: str, progress_fn: Callable | None = None, **kwargs) -> dspy.Prediction:
+        if progress_fn:
+            self.progress_fn = progress_fn
         with dspy.settings.context(temperature=0.1):
             return self.weave(goal=goal, **kwargs)
+
 
 
 def build_default_topology() -> GraphTopology:

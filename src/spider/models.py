@@ -86,6 +86,7 @@ def get_lm(config: SpiderConfig, role: str = "primary") -> dspy.LM:
     return dspy.LM(
         model=f"ollama/{litellm_model}",
         api_base=config.ollama_base_url,
+        extra_body={"think": False},
     )
 
 

@@ -23,6 +23,7 @@ dependencies = [
     "loguru>=0.7,<1.0",
     "langfuse>=2.0,<3.0",
     "openinference-instrumentation-dspy>=0.1.0,<1.0.0",
+    "validators>=0.22.0,<1.0.0",
 ]
 
 [project.optional-dependencies]

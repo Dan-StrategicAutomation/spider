@@ -7,6 +7,7 @@ Topology schemas (NodeDef, GraphTopology) also live here for centralization.
 from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator
+import validators
 
 
 class ScanPhase(StrEnum):
@@ -323,3 +324,22 @@ class GeneratedPayload(BaseModel):
     expected_result: str = ""
     waf_bypass_notes: str = ""
     validation_status: str = "valid"
+
+
+def validate_target_syntax(target: str) -> bool:
+    """Check if a target is a valid IPv4/IPv6 address or a domain name.
+
+    Uses the validators library for robust, non-custom validation.
+    """
+    if not target:
+        return False
+
+    # Check IP (v4 or v6)
+    if validators.ip_address.ipv4(target) or validators.ip_address.ipv6(target):
+        return True
+
+    # Check Domain
+    if validators.domain(target):
+        return True
+
+    return False

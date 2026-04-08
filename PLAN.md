@@ -514,32 +514,33 @@ loguru>=0.7,<1.0               # Structured logging
 ## 10. Implementation Phases
 
 ### Phase 1: Foundation (Week 1-2)
-- [ ] Project scaffold (pyproject.toml, ruff, pytest config)
-- [ ] Pydantic schemas for all structured data
-- [ ] ScopeGuard + audit logger
-- [ ] Docker sandbox with Kali tools
-- [ ] Basic config via pydantic-settings
+- [x] Project scaffold (pyproject.toml, ruff, pytest config)
+- [x] Pydantic schemas for all structured data
+- [x] ScopeGuard + audit logger
+- [x] Docker sandbox with Kali tools
+- [x] Basic config via pydantic-settings
 
 ### Phase 2: Tool Layer (Week 2-3)
-- [ ] Recon tools (nmap, whois, dns_enum)
-- [ ] Enum tools (gobuster, ffuf, nikto)
-- [ ] Custom: cve_intelligence (NVD + KEV + EPSS)
-- [ ] Custom: exploit_matcher (Exploit-DB + Metasploit)
-- [ ] Tool adapter for dspy.Tool registration
+- [x] Recon tools (nmap, whois, dns_enum)
+- [x] Enum tools (gobuster, ffuf, nikto)
+- [x] Custom: cve_intelligence (NVD + KEV + EPSS)
+- [x] Custom: exploit_matcher (Exploit-DB + Metasploit)
+- [x] Tool adapter for dspy.Tool registration
 
 ### Phase 3: DSPy Core (Week 3-4)
-- [ ] Node signatures (Recon, VulnAnalysis, ExploitPlanner)
-- [ ] Graph Weaver with dspy.Refine
-- [ ] Graph Runner with wave-based parallel execution
-- [ ] Self-validator with pentest-specific reward functions
-- [ ] Orchestrator top-level pipeline
+- [x] Node signatures (Recon, VulnAnalysis, ExploitPlanner)
+- [x] Graph Weaver with dspy.Refine
+- [x] Graph Runner with wave-based parallel execution
+- [x] Self-validator with pentest-specific reward functions
+- [x] Orchestrator top-level pipeline
+- [x] Real-time progress logging for all LLM phases
 
 ### Phase 4: HITL + Safety (Week 4-5)
-- [ ] HITL gate with approval dialogs
-- [ ] Custom payload generator with dspy.Refine
-- [ ] Attack chain builder
+- [x] HITL gate with approval dialogs
+- [x] Custom payload generator with dspy.Refine
+- [x] Attack chain builder
 - [ ] Adaptive tester for self-solving
-- [ ] Comprehensive safety tests
+- [x] Comprehensive safety tests
 
 ### Phase 5: TUI (Week 5-6)
 - [ ] Textual dashboard layout

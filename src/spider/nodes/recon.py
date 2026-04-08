@@ -13,6 +13,7 @@ class ReconSignature(dspy.Signature):
     """Perform comprehensive reconnaissance on the target. Use all available
     tools to discover hosts, open ports, service versions, and technologies.
     Identify the full attack surface."""
+
     target: str = dspy.InputField(desc="Target IP or hostname to scan")
     findings: ReconResults = dspy.OutputField()
 
@@ -50,6 +51,7 @@ class ReconModule(dspy.Module):
             threshold=0.7,
         )
 
-    def forward(self, target: str) -> dspy.Prediction:
+    def forward(self, **kwargs):
+        target = kwargs.get("target", "")
         with dspy.settings.context(temperature=0.1):
             return self.agent(target=target)

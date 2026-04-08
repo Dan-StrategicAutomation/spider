@@ -5,6 +5,7 @@ auto-healing loop for end-to-end pentest execution.
 """
 
 from datetime import datetime, timezone
+from typing import Any, Callable
 
 import dspy
 
@@ -33,20 +34,23 @@ class SpiderOrchestrator:
         scope_guard: ScopeGuard | None = None,
         hitl_gate: HITLGate | None = None,
         session_store: SessionStore | None = None,
-        audit_logger=None,
+        audit_logger: Any | None = None,
+        progress_fn: Callable[[str, str], None] | None = None,
     ) -> None:
         self.config = config
-        self.weaver = GraphWeaver()
+        self.progress_fn = progress_fn or (lambda _s, _d="": None)
+        self.weaver = GraphWeaver(progress_fn=self.progress_fn)
         self.scope_guard = scope_guard
         self.hitl_gate = hitl_gate
         self.session_store = session_store
         self.audit_logger = audit_logger
         self._all_tools: dict[str, dspy.Tool] = {}
 
+
     def _build_tools(
         self,
         scope_guard: ScopeGuard | None = None,
-        audit_logger=None,
+        audit_logger: Any | None = None,
     ) -> dict[str, dspy.Tool]:
         """Build all security tools with scope guard and audit wrapper."""
         if self._all_tools:
@@ -83,13 +87,13 @@ class SpiderOrchestrator:
         """Build DSPy modules for each node in the topology."""
         node_modules: dict[str, dspy.Module] = {}
 
-        from spider.nodes.enum import EnumModule
+        from spider.nodes.enum import WebEnumerationModule, ServiceEnumerationModule
         from spider.nodes.executor import ExecutorModule
-        from spider.nodes.exploit_planner import ExploitPlannerModule
-        from spider.nodes.post_exploit import PostExploitModule
+        from spider.nodes.exploit_planner import ExploitPlanningModule
+        from spider.nodes.post_exploit import PostExploitationModule
         from spider.nodes.recon import ReconModule
-        from spider.nodes.reporter import ReportingModule
-        from spider.nodes.vuln_analysis import VulnAnalysisModule
+        from spider.nodes.reporter import ReporterModule
+        from spider.nodes.vuln_analysis import VulnerabilityAnalysisModule
         from spider.schemas import NodeRole
 
         for node in topology.nodes:
@@ -111,31 +115,32 @@ class SpiderOrchestrator:
                         tools["ffuf_scan"],
                         tools["nikto_scan"],
                     ]
-                    node_modules[node_id] = EnumModule(tools=tools_list)
+                    node_modules[node_id] = WebEnumerationModule(tools=tools_list)
                 else:
                     tools_list = list(tools.values())
                     node_modules[node_id] = ReconModule(tools=tools_list)
             elif node_role == NodeRole.CHAIN_OF_THOUGHT:
                 if "vuln" in node_id.lower():
-                    node_modules[node_id] = VulnAnalysisModule()
+                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=list(tools.values()))
                 elif "exploit" in node_id.lower() or "plan" in node_id.lower():
-                    node_modules[node_id] = ExploitPlannerModule()
+                    node_modules[node_id] = ExploitPlanningModule(tools=list(tools.values()))
                 elif "report" in node_id.lower():
-                    node_modules[node_id] = ReportingModule()
+                    node_modules[node_id] = ReporterModule(tools=list(tools.values()))
                 else:
-                    node_modules[node_id] = VulnAnalysisModule()
+                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=list(tools.values()))
             else:
                 from spider.nodes.executor import ExecutorModule
-                from spider.nodes.post_exploit import PostExploitModule
+                from spider.nodes.post_exploit import PostExploitationModule
 
                 if "post" in node_id.lower() or "elevate" in node_id.lower():
-                    node_modules[node_id] = PostExploitModule()
+                    node_modules[node_id] = PostExploitationModule(tools=list(tools.values()))
                 elif "exec" in node_id.lower():
                     node_modules[node_id] = ExecutorModule(
+                        tools=list(tools.values()),
                         hitl_gate=self.hitl_gate,
                     )
                 else:
-                    node_modules[node_id] = VulnAnalysisModule()
+                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=list(tools.values()))
 
         return node_modules
 
@@ -158,37 +163,53 @@ class SpiderOrchestrator:
         session_id = f"run_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
         # Phase 1: Weave topology from goal and target
+        self.progress_fn("weave", "Generating attack topology with DSPy weaver...")
         tool_names = ", ".join(
             self._build_tools(scope_guard=self.scope_guard, audit_logger=self.audit_logger).keys()
         )
         with dspy.settings.context(temperature=0.1):
-            topology = self.weaver.weave(
+            prediction = self.weaver(
                 goal=goal,
                 target_info=target,
                 constraints_text=self.config.rules_of_engagement,
                 available_tools=tool_names,
+                progress_fn=self.progress_fn,
             )
+            topology = prediction.topology
+        self.progress_fn(
+            "weave_done",
+            f"Topology woven: {len(topology.nodes)} nodes, {len(topology.edges)} edges",
+        )
 
         # Phase 2: Provision tools
+        self.progress_fn("provision", f"Provisioning {len(self._all_tools)} security tools...")
         tools = self._build_tools(
             scope_guard=self.scope_guard,
             audit_logger=self.audit_logger,
         )
+        self.progress_fn("provision_done", f"Tools ready: {', '.join(tools.keys())}")
 
         # Phase 3: Build node modules with topology + tools
+        self.progress_fn("build", f"Building {len(topology.nodes)} DSPy node modules...")
         node_modules = self._build_node_modules(topology, tools)
+        self.progress_fn("build_done", "Node modules ready")
 
         # Phase 4: Execute via GraphRunner
+        node_ids = [n.id for n in topology.nodes]
+        self.progress_fn("execute", f"Running pipeline: {' -> '.join(node_ids)}")
         runner = GraphRunner(
             topology=topology,
             node_modules=node_modules,
             goal=goal,
             target=target,
             tools=tools,
+            progress_fn=self.progress_fn,
         )
         result = runner(**kwargs)
+        self.progress_fn("execute_done", "All nodes executed")
 
         # Phase 5: Quality evaluation + auto-healing loop
+        self.progress_fn("evaluate", "Evaluating output quality...")
         healed = self._heal_loop(
             goal=goal,
             topology=topology,
@@ -197,6 +218,7 @@ class SpiderOrchestrator:
             initial_result=result,
             **kwargs,
         )
+        self.progress_fn("done", "Scan complete")
 
         return {
             "session_id": session_id,
@@ -222,14 +244,26 @@ class SpiderOrchestrator:
         evaluator = SelfEvaluator()
         current_result = initial_result
 
-        for _round_num in range(max_rounds):
+        for round_num in range(max_rounds):
+            self.progress_fn("heal_eval", f"Quality check round {round_num + 1}/{max_rounds}...")
             quality = evaluator.evaluate(
                 goal=goal,
                 result=current_result,
             )
+            self.progress_fn(
+                "heal_score",
+                f"Quality score: {quality:.2f} (threshold: {self.config.refine_threshold})",
+            )
 
             if quality >= self.config.refine_threshold:
+                self.progress_fn(
+                    "heal_done", f"Quality {quality:.2f} meets threshold -- no healing needed"
+                )
                 break
+
+            self.progress_fn(
+                "heal_reweave", f"Quality below threshold -- re-weaving with feedback..."
+            )
 
             # Re-weave with failure feedback
             feedback = (
@@ -244,14 +278,16 @@ class SpiderOrchestrator:
                         scope_guard=self.scope_guard, audit_logger=self.audit_logger
                     ).keys()
                 )
-                new_topology = self.weaver.weave(
+                new_prediction = self.weaver(
                     goal=goal,
                     target_info=kwargs.get("target", ""),
                     constraints_text=self.config.rules_of_engagement,
                     available_tools=tool_names,
                     previous_result=str(current_result),
                     feedback=feedback,
+                    progress_fn=self.progress_fn,
                 )
+                new_topology = new_prediction.topology
                 new_modules = self._build_node_modules(new_topology, tools)
                 runner = GraphRunner(
                     topology=new_topology,
@@ -259,6 +295,7 @@ class SpiderOrchestrator:
                     goal=goal,
                     target=kwargs.get("target", ""),
                     tools=tools,
+                    progress_fn=self.progress_fn,
                 )
                 current_result = runner(**kwargs)
 

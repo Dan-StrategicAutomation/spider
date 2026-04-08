@@ -25,6 +25,11 @@ class SelfEvaluator(dspy.Module):
         super().__init__()
         self.judge = dspy.ChainOfThought(SelfEvalSignature)
 
+    def evaluate(self, goal: str, result: dspy.Prediction) -> float:
+        """Evaluate the overall quality of a complete pentest result prediction."""
+        # For a full result, we judge the aggregate output
+        return self.forward(goal=goal, node_type="overall", pred=result)
+
     def forward(self, goal: str, node_type: str, pred: dspy.Prediction) -> float:
         output_val = str(pred)
         result = self.judge(goal=goal, node_type=node_type, output=output_val)
