@@ -15,7 +15,13 @@ from spider.schemas import GraphTopology
 class GraphRunner(dspy.Module):
     """Executes a validated GraphTopology in parallel waves."""
 
-    def __init__(self, topology: GraphTopology, node_modules: dict[str, dspy.Module], goal: str = ""):
+    def __init__(
+        self,
+        topology: GraphTopology,
+        node_modules: dict[str, dspy.Module],
+        goal: str = "",
+        **kwargs,
+    ):
         super().__init__()
         self.topology = topology
         self.node_modules = node_modules
@@ -31,6 +37,7 @@ class GraphRunner(dspy.Module):
         all_results: dict[str, Any] = {**kwargs}
 
         for wave in waves:
+
             async def run_one(nid: str):
                 module = self.node_modules[nid]
                 inputs = self._wave_inputs(nid, all_results)
@@ -38,7 +45,11 @@ class GraphRunner(dspy.Module):
                     result = await dspy.asyncify(module)(**inputs)
                     all_results[nid] = result
                     node_def = next(n for n in self.topology.nodes if n.id == nid)
-                    out_val = result.get(node_def.output) if isinstance(result, dict) else getattr(result, node_def.output, None)
+                    out_val = (
+                        result.get(node_def.output)
+                        if isinstance(result, dict)
+                        else getattr(result, node_def.output, None)
+                    )
                     if out_val is not None:
                         all_results[node_def.output] = str(out_val)
                     return nid, None
@@ -50,7 +61,7 @@ class GraphRunner(dspy.Module):
                 failures = [f"{nid}: {err}" for nid, err in outcomes if err]
                 return dspy.Prediction(
                     results=all_results,
-                    error=f"Wave failed: {\'; \'.join(failures)}",
+                    error=f"Wave failed: {'; '.join(failures)}",
                     completed_waves=0,
                 )
 
