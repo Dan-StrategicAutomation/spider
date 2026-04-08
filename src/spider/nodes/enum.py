@@ -6,7 +6,7 @@ Both wrapped with dspy.Refine for quality improvement.
 
 import dspy
 
-from spider.schemas import WebFindings, ServiceDetails
+from spider.schemas import ServiceDetails, WebFindings
 
 
 class WebEnumSignature(dspy.Signature):

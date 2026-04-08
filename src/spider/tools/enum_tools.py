@@ -7,7 +7,11 @@ import json
 import subprocess
 
 
-def gobuster_scan(target: str, mode: str = "dir", wordlist: str = "/usr/share/wordlists/dirb/common.txt") -> str:
+def gobuster_scan(
+    target: str,
+    mode: str = "dir",
+    wordlist: str = "/usr/share/wordlists/dirb/common.txt",
+) -> str:
     """Directory and file brute-forcing against web targets.
     Supports dir, dns, and vhost modes. Default uses common wordlist."""
     url = target if target.startswith("http") else f"http://{target}"
@@ -21,7 +25,11 @@ def gobuster_scan(target: str, mode: str = "dir", wordlist: str = "/usr/share/wo
     })
 
 
-def ffuf_scan(target: str, wordlist: str = "/usr/share/wordlists/dirb/common.txt", extensions: str = "php,html,txt") -> str:
+def ffuf_scan(
+    target: str,
+    wordlist: str = "/usr/share/wordlists/dirb/common.txt",
+    extensions: str = "php,html,txt",
+) -> str:
     """Fast web fuzzer for discovering hidden endpoints, parameters, and virtual
     hosts"""
     url = target if target.startswith("http") else f"http://{target}"
@@ -67,8 +75,24 @@ def register_all(scope_guard=None, audit_logger=None):
     """Register all enum tools via the adapter."""
     from spider.tools.adapter import make_tool
     return {
-        "gobuster_scan": make_tool(gobuster_scan, scope_guard=scope_guard, audit_logger=audit_logger),
-        "ffuf_scan": make_tool(ffuf_scan, scope_guard=scope_guard, audit_logger=audit_logger),
-        "nikto_scan": make_tool(nikto_scan, scope_guard=scope_guard, audit_logger=audit_logger),
-        "enum4linux": make_tool(enum4linux, scope_guard=scope_guard, audit_logger=audit_logger),
+        "gobuster_scan": make_tool(
+            gobuster_scan,
+            scope_guard=scope_guard,
+            audit_logger=audit_logger,
+        ),
+        "ffuf_scan": make_tool(
+            ffuf_scan,
+            scope_guard=scope_guard,
+            audit_logger=audit_logger,
+        ),
+        "nikto_scan": make_tool(
+            nikto_scan,
+            scope_guard=scope_guard,
+            audit_logger=audit_logger,
+        ),
+        "enum4linux": make_tool(
+            enum4linux,
+            scope_guard=scope_guard,
+            audit_logger=audit_logger,
+        ),
     }

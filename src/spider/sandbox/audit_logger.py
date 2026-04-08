@@ -35,9 +35,8 @@ class AuditLogger:
             "params": params or {},
             "result": result[:2000] if result else "",
         }
-        with self._lock:
-            with open(self._path, "a") as f:
-                f.write(json.dumps(entry) + "\n")
+        with self._lock, open(self._path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
 
     def update_phase(self, phase: str, result: str = "") -> None:
         """Not implemented for audit integrity -- use a separate status tracker."""

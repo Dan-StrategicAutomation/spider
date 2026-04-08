@@ -6,14 +6,16 @@ import os
 import sys
 from pathlib import Path
 
+import questionary
+
 from spider.config import SpiderConfig
 from spider.engine.orchestrator import SpiderOrchestrator
 from spider.models import _ollama_available, configure_spider
 from spider.sandbox.audit_logger import AuditLogger
 from spider.sandbox.hitl_gate import HITLGate
 from spider.sandbox.scope_guard import ScopeGuard
+from spider.observability import setup_observability
 from spider.schemas import validate_target_syntax
-import questionary
 
 # ── Colors ──────────────────────────────────────────────────────────────
 
@@ -91,7 +93,7 @@ def cli_progress(step: str, detail: str):
         icon = f"{RED}[✗]{RESET}"
     elif "running" in step or "execute" in step or "weave" in step or "heal" in step:
         icon = f"{YELLOW}[>]{RESET}"
-    
+
     # Indent sub-steps (node results)
     if "node_" in step or step == "wave":
         print(f"    {icon} {detail}")
@@ -105,6 +107,9 @@ def cli_progress(step: str, detail: str):
 def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
     """Initialize SPIDER configuration and orchestrator."""
     config = SpiderConfig()
+
+    # Setup Langfuse / DSPy tracing
+    setup_observability(config)
 
     divider("INITIALIZATION")
     info("Config loaded from .env / environment")
@@ -120,7 +125,7 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
         if config.openrouter_api_key:
             warn("Falling back to cloud model")
         else:
-            error("No fallback configured. Set SPIDER_OPENROUTER_API_KEY")
+            error("No fallback configured. Set OPENROUTER_API_KEY")
             sys.exit(1)
 
     # Configure DSPy
@@ -170,9 +175,16 @@ def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "
 
     # Build goal from mode
     if mode == "full":
-        goal = f"Perform a full penetration test against {target}. Discover vulnerabilities, build attack chains, and exploit them with human approval. Generate a complete report."
+        goal = (
+            f"Perform a full penetration test against {target}. Discover vulnerabilities, "
+            "build attack chains, and exploit them with human approval. "
+            "Generate a complete report."
+        )
     else:
-        goal = f"Perform comprehensive reconnaissance against {target}. Discover all hosts, ports, services, and technologies. Identify the attack surface."
+        goal = (
+            f"Perform comprehensive reconnaissance against {target}. Discover all "
+            "hosts, ports, services, and technologies. Identify the attack surface."
+        )
 
     divider("SCANNING")
     info(f"Goal: {goal[:80]}...")
@@ -184,6 +196,10 @@ def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "
         # Save results
         session_db.save_results(session_id, result)
         success(f"Results saved to session {session_id}")
+
+        # Ensure traces are pushed to Langfuse
+        from spider.observability import flush_observability
+        flush_observability()
 
         # Show findings summary
         divider("FINDINGS")
@@ -208,11 +224,14 @@ def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "
 def new_scan(session_db, orchestrator):
     """Run a new pentest scan against a target (interactive)."""
     divider("NEW SCAN")
-    
+
     def target_validator(text):
         if validate_target_syntax(text):
             return True
-        return "Invalid format: Enter a valid IP address or domain name (e.g., 127.0.0.1 or target.com)."
+        return (
+            "Invalid format: Enter a valid IP address or domain name "
+            "(e.g., 127.0.0.1 or target.com)."
+        )
 
     target = questionary.text(
         "Enter target IP or domain:",
@@ -245,9 +264,16 @@ def new_scan(session_db, orchestrator):
     if mode == "3":
         goal = prompt("Your goal: ")
     elif mode == "1":
-        goal = f"Perform comprehensive reconnaissance against {target}. Discover all hosts, ports, services, and technologies. Identify the attack surface."
+        goal = (
+            f"Perform comprehensive reconnaissance against {target}. Discover all "
+            "hosts, ports, services, and technologies. Identify the attack surface."
+        )
     else:
-        goal = f"Perform a full penetration test against {target}. Discover vulnerabilities, build attack chains, and exploit them with human approval. Generate a complete report."
+        goal = (
+            f"Perform a full penetration test against {target}. Discover vulnerabilities, "
+            "build attack chains, and exploit them with human approval. "
+            "Generate a complete report."
+        )
 
     divider("SCANNING")
     info(f"Target: {target}")
@@ -260,6 +286,10 @@ def new_scan(session_db, orchestrator):
         # Save results
         session_db.save_results(session_id, result)
         success(f"Results saved to session {session_id}")
+
+        # Ensure traces are pushed to Langfuse
+        from spider.observability import flush_observability
+        flush_observability()
 
         # Show findings
         show_findings(result)
@@ -312,9 +342,9 @@ def view_history(session_db):
         risk = row.get("risk_level", "—")
 
         status_color = GREEN if status == "completed" else RED
-        print(
-            f"  {sid:<6} {target:<20} {date:<20} {status_color}{status:<12}{RESET} {YELLOW}{risk:<10}{RESET}"
-        )
+        row = f"  {sid:<6} {target:<20} {date:<20} {status_color}{status:<12}{RESET} "
+        row += f"{YELLOW}{risk:<10}{RESET}"
+        print(row)
 
     divider()
     sid_str = prompt("Enter Session ID to view details (or press Enter to go back): ")
@@ -497,9 +527,8 @@ def main_menu(session_db, config, orchestrator):
             print(f"  Primary model:  {CYAN}{config.primary_model}{RESET}")
             print(f"  Eval model:     {CYAN}{config.eval_model}{RESET}")
             print(f"  Ollama URL:     {CYAN}{config.ollama_base_url}{RESET}")
-            print(
-                f"  Allowed targets: {CYAN}{', '.join(config.allowed_targets) or 'None (unrestricted)'}{RESET}"
-            )
+            targets_str = ", ".join(config.allowed_targets) or "None (unrestricted)"
+            print(f"  Allowed targets: {CYAN}{targets_str}{RESET}")
             print(f"  Excluded targets: {CYAN}{', '.join(config.excluded_targets)}{RESET}")
             input(f"\n{DIM}Press Enter to continue...{RESET}")
         elif choice == "5":

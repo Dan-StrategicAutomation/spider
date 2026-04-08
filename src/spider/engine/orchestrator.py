@@ -4,8 +4,9 @@ Wires together the GraphWeaver, tool provisioning, GraphRunner, and
 auto-healing loop for end-to-end pentest execution.
 """
 
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any
 
 import dspy
 
@@ -87,7 +88,7 @@ class SpiderOrchestrator:
         """Build DSPy modules for each node in the topology."""
         node_modules: dict[str, dspy.Module] = {}
 
-        from spider.nodes.enum import WebEnumerationModule, ServiceEnumerationModule
+        from spider.nodes.enum import WebEnumerationModule
         from spider.nodes.executor import ExecutorModule
         from spider.nodes.exploit_planner import ExploitPlanningModule
         from spider.nodes.post_exploit import PostExploitationModule
@@ -262,7 +263,7 @@ class SpiderOrchestrator:
                 break
 
             self.progress_fn(
-                "heal_reweave", f"Quality below threshold -- re-weaving with feedback..."
+                "heal_reweave", "Quality below threshold -- re-weaving with feedback..."
             )
 
             # Re-weave with failure feedback

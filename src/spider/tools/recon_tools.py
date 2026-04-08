@@ -94,7 +94,19 @@ def register_all(scope_guard=None, audit_logger=None):
     return {
         "nmap_scan": make_tool(nmap_scan, scope_guard=scope_guard, audit_logger=audit_logger),
         "masscan_scan": make_tool(masscan_scan, scope_guard=scope_guard, audit_logger=audit_logger),
-        "whois_lookup": make_tool(whois_lookup, scope_guard=scope_guard, audit_logger=audit_logger),
-        "dns_enum": make_tool(dns_enum, scope_guard=scope_guard, audit_logger=audit_logger),
-        "subdomain_enum": make_tool(subdomain_enum, scope_guard=scope_guard, audit_logger=audit_logger),
+        "whois_lookup": make_tool(
+            whois_lookup,
+            scope_guard=scope_guard,
+            audit_logger=audit_logger,
+        ),
+        "dns_enum": make_tool(
+            dns_enum,
+            scope_guard=scope_guard,
+            audit_logger=audit_logger,
+        ),
+        "subdomain_enum": make_tool(
+            subdomain_enum,
+            scope_guard=scope_guard,
+            audit_logger=audit_logger,
+        ),
     }

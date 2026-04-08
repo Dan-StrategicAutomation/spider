@@ -4,11 +4,11 @@ Takes a pentest goal and produces a validated DAG of nodes.
 Uses dspy.Refine with structural + quality reward for automatic retry.
 """
 
-from typing import Callable
+from collections.abc import Callable
 
 import dspy
 
-from spider.schemas import GraphTopology, TopologyScore, NodeDef, EdgeDef, NodeRole
+from spider.schemas import EdgeDef, GraphTopology, NodeDef, NodeRole, TopologyScore
 
 
 class TopologyEvalSignature(dspy.Signature):
@@ -71,8 +71,8 @@ class GraphWeaver(dspy.Module):
                 self.progress_fn(
                     "weave_attempt", f"  Draft valid: {len(waves)} waves, {len(topo.nodes)} nodes"
                 )
-            except ValueError as e:
-                self.progress_fn("weave_attempt", f"  Draft rejected: cycle detected")
+            except ValueError:
+                self.progress_fn("weave_attempt", "  Draft rejected: cycle detected")
                 return 0.0
             # Quality validation
             score = topology_eval(goal=args.get("goal", ""), topology_json=topo.model_dump_json())

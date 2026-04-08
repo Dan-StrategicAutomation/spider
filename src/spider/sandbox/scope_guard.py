@@ -3,8 +3,8 @@
 Never attacks out of scope. Checked at the tool adapter level before every invocation.
 """
 
-import ipaddress
 import fnmatch
+import ipaddress
 
 
 class ScopeGuard:
@@ -28,10 +28,9 @@ class ScopeGuard:
                 self._allowed_networks.append(cidr)  # type: ignore[arg-type]
 
         if lab_network:
-            try:
+            import contextlib
+            with contextlib.suppress(ValueError):
                 self._lab_network = ipaddress.IPv4Network(lab_network, strict=False)
-            except ValueError:
-                pass
 
     def authorize(self, target: str, action: str) -> tuple[bool, str]:
         """Check if target is authorized for the given action.

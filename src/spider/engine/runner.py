@@ -5,6 +5,7 @@ via dspy.asyncify + asyncio.gather. Fails fast if a wave has an error.
 """
 
 import asyncio
+import sys
 from typing import Any
 
 import dspy
@@ -39,31 +40,28 @@ class GraphRunner(dspy.Module):
         elif hasattr(module, "agent") and module.agent:
             # Handle dspy.Refine which wraps the module in .module attribute
             agent = module.agent
-            if hasattr(agent, "module"):
-                inner = agent.module
-            else:
-                inner = agent
+            inner = agent.module if hasattr(agent, "module") else agent
         elif hasattr(module, "Judge") and module.Judge:
             inner = module.Judge
 
         if inner and hasattr(inner, "signature"):
             sig = inner.signature
-            
+
             # Robust field extraction for DSPy 3.x
             inp = getattr(sig, "input_fields", {})
             if callable(inp):
                 inp = inp()
-            
+
             out = getattr(sig, "output_fields", {})
             if callable(out):
                 out = out()
-            
+
             # Handle dict-based (name: Field) or list-based field storage
             if isinstance(inp, dict):
                 in_names = list(inp.keys())
             else:
                 in_names = [getattr(f, "name", str(f)) for f in (inp or [])]
-                
+
             if isinstance(out, dict):
                 out_names = list(out.keys())
             else:
@@ -106,24 +104,12 @@ class GraphRunner(dspy.Module):
             self.progress_fn("wave", f"Executing wave: {', '.join(wave)}")
 
             async def run_one(nid: str):
-                import sys, traceback
                 self.progress_fn("node_running", f"  LLM running: {nid}")
                 module = self.node_modules[nid]
-                print(f"[DEBUG] nid={nid!r}, module_type={type(module).__name__}, is_callable={callable(module)}", file=sys.stderr)
-                if isinstance(module, dict):
-                    print(f"[DEBUG] MODULE IS A DICT: keys={list(module.keys())}", file=sys.stderr)
-                    traceback.print_stack(file=sys.stderr)
                 inputs = self._get_module_inputs(nid, all_results)
                 try:
-                    module = self.node_modules[nid]
-                    print(f"[DEBUG] nid={nid!r}, module={type(module).__name__}, callable={callable(module)}", file=sys.stderr)
-                    inputs = self._get_module_inputs(nid, all_results)
-                    print(f"[DEBUG] inputs={inputs}", file=sys.stderr)
-
                     async def do_call():
-                        print("[DEBUG] inside do_call, calling dspy.asyncify...", file=sys.stderr)
                         ac = dspy.asyncify(module)
-                        print(f"[DEBUG] asyncify returned: {type(ac)}", file=sys.stderr)
                         return await ac(**inputs)
 
                     result = await do_call()

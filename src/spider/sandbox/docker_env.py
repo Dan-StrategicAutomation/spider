@@ -80,7 +80,7 @@ class DockerSandbox:
 
     def __exit__(self, *args):
         self.stop()
-    
+
     @property
     def is_running(self) -> bool:
         if not self._container:

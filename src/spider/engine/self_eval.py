@@ -4,6 +4,7 @@ Used as reward functions for dspy.Refine on each node type.
 """
 
 import dspy
+
 from spider.schemas import QualityScore
 
 
@@ -14,7 +15,9 @@ class SelfEvalSignature(dspy.Signature):
     - Is there sufficient evidence/detail to support claims?
     - Would a human pentester consider this result useful?"""
     goal: str = dspy.InputField()
-    node_type: str = dspy.InputField(desc="Type of pentest node: recon, vuln_analysis, exploit_plan, report")
+    node_type: str = dspy.InputField(
+        desc="Type of pentest node: recon, vuln_analysis, exploit_plan, report"
+    )
     output: str = dspy.InputField()
     evaluation: QualityScore = dspy.OutputField()
 

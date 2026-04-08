@@ -4,9 +4,8 @@ All exploitation requires explicit human approval. Only recon and enumeration
 are fully autonomous.
 """
 
-import json
-import time
 import threading
+import time
 
 
 class HITLApproval:
@@ -92,9 +91,10 @@ class HITLGate:
         # Use questionary for interactive prompt
         import questionary
 
+        cve_line = f"CVE: {cve_id}\n" if cve_id else ""
         answer = questionary.confirm(
             f"EXECUTE: {action} -> {target} (risk: {risk_level})\n"
-            f"{f'CVE: {cve_id}\n' if cve_id else ''}"
+            f"{cve_line}"
             f"{details}\n"
             f"Approve?",
             default=False,

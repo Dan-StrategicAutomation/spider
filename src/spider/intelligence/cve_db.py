@@ -4,10 +4,11 @@ NVD rate limit: 0.6 req/sec without API key, 5 req/sec with key.
 Caching: SQLite cache with 24h TTL.
 """
 
-import requests
 import time
-from functools import lru_cache
 from datetime import datetime, timedelta
+
+import requests
+
 
 class NVDAPI:
     """NIST National Vulnerability Database API 2.0 client."""

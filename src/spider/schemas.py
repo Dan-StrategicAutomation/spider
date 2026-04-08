@@ -6,8 +6,8 @@ Topology schemas (NodeDef, GraphTopology) also live here for centralization.
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, field_validator
 import validators
+from pydantic import BaseModel, Field, field_validator
 
 
 class ScanPhase(StrEnum):
@@ -339,7 +339,4 @@ def validate_target_syntax(target: str) -> bool:
         return True
 
     # Check Domain
-    if validators.domain(target):
-        return True
-
-    return False
+    return bool(validators.domain(target))
