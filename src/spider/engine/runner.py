@@ -35,67 +35,79 @@ class GraphRunner(dspy.Module):
         """Extract InputField and OutputField names from a DSPy module's signature."""
         inner = None
 
-        if hasattr(module, "predictor") and module.predictor:
-            inner = module.predictor
-        elif hasattr(module, "agent") and module.agent:
-            # Handle dspy.Refine which wraps the module in .module attribute
-            agent = module.agent
-            inner = agent.module if hasattr(agent, "module") else agent
-        elif hasattr(module, "Judge") and module.Judge:
-            inner = module.Judge
+        # Try common wrapper attributes
+        for attr in ["predictor", "agent", "Judge", "module"]:
+            val = getattr(module, attr, None)
+            if val is not None:
+                inner = val
+                break
+        
+        if inner is None:
+            inner = module
 
-        if inner and hasattr(inner, "signature"):
-            sig = inner.signature
+        sig = getattr(inner, "signature", None)
+        if sig is None:
+            # Maybe the module ITSELF is a Predictor/Signature holder
+            sig = getattr(module, "signature", None)
 
+        if sig:
             # Robust field extraction for DSPy 3.x
-            inp = getattr(sig, "input_fields", {})
-            if callable(inp):
-                inp = inp()
+            # 1. Try input_fields/output_fields as dicts or callables
+            inp_data = getattr(sig, "input_fields", {})
+            out_data = getattr(sig, "output_fields", {})
+            
+            if callable(inp_data):
+                inp_data = inp_data()
+            if callable(out_data):
+                out_data = out_data()
 
-            out = getattr(sig, "output_fields", {})
-            if callable(out):
-                out = out()
+            def get_names(data):
+                if isinstance(data, dict):
+                    return list(data.keys())
+                if isinstance(data, list | tuple):
+                    names = []
+                    for f in data:
+                        if hasattr(f, "name"):
+                            names.append(f.name)
+                        elif isinstance(f, str):
+                            names.append(f)
+                    return names
+                return []
 
-            # Handle dict-based (name: Field) or list-based field storage
-            if isinstance(inp, dict):
-                in_names = list(inp.keys())
-            else:
-                in_names = [getattr(f, "name", str(f)) for f in (inp or [])]
-
-            if isinstance(out, dict):
-                out_names = list(out.keys())
-            else:
-                out_names = [getattr(f, "name", str(f)) for f in (out or [])]
+            in_names = get_names(inp_data)
+            out_names = get_names(out_data)
 
             if in_names or out_names:
                 return in_names, out_names
 
-        # Fallback for simple signatures or custom attributes
-        for attr_name in dir(module.__class__):
-            if attr_name.startswith("_"):
-                continue
-            attr = getattr(module.__class__, attr_name, None)
-            if attr is not None and hasattr(attr, "name"):
-                inp_f = getattr(attr, "name", None)
-                if inp_f:
-                    return [inp_f], []
-
+        # Fallback: inspection of attributes if signature extraction failed
+        # This is a last resort and should be rare with modern DSPy
         return [], []
 
 
     def _get_module_inputs(self, node_id: str, all_results: dict[str, Any]) -> dict[str, Any]:
         """Build input dict from signature's InputField definitions.
         
-        Strictly uses naming-based mapping. Root cause fixes in Weaver ensure
-        field names are canonical and aligned with signatures.
+        Uses naming-based mapping first. If names don't match, falls back to 
+        positional mapping based on the NodeDef.inputs list.
         """
         module = self.node_modules[node_id]
         input_fields, _ = self._get_signature_fields(module)
+        node_def = next(n for n in self.topology.nodes if n.id == node_id)
 
         inputs = {}
+        
+        # Try direct naming match first
         for field in input_fields:
             if field in all_results:
                 inputs[field] = all_results[field]
+
+        # If we didn't fill all fields, try positional mapping from topology.inputs
+        if len(inputs) < len(input_fields) and len(node_def.inputs) == len(input_fields):
+            for i, field in enumerate(input_fields):
+                topo_input_name = node_def.inputs[i]
+                if topo_input_name in all_results:
+                    inputs[field] = all_results[topo_input_name]
 
         return inputs
 
@@ -111,6 +123,7 @@ class GraphRunner(dspy.Module):
                 self.progress_fn("node_running", f"  LLM running: {nid}")
                 module = self.node_modules[nid]
                 inputs = self._get_module_inputs(nid, all_results)
+                
                 try:
                     async def do_call():
                         ac = dspy.asyncify(module)
@@ -119,17 +132,28 @@ class GraphRunner(dspy.Module):
                     result = await do_call()
                     all_results[nid] = result
                     node_def = next(n for n in self.topology.nodes if n.id == nid)
-                    out_val = (
-                        result.get(node_def.output)
-                        if isinstance(result, dict)
-                        else getattr(result, node_def.output, None)
-                    )
+                    
+                    # Robust output extraction
+                    out_val = None
+                    if isinstance(result, dict):
+                        out_val = result.get(node_def.output)
+                    else:
+                        out_val = getattr(result, node_def.output, None)
+                    
+                    # Fallback to first output field if named lookup failed
+                    if out_val is None:
+                        _, output_fields = self._get_signature_fields(module)
+                        if output_fields:
+                            first_field = output_fields[0]
+                            if isinstance(result, dict):
+                                out_val = result.get(first_field)
+                            else:
+                                out_val = getattr(result, first_field, None)
 
                     if out_val is not None:
                         # Store in all_results using the topology's expected name.
-                        # Naming alignment is guaranteed by Weaver canonical registry.
-                        # DO NOT stringify. Preserve Pydantic model for downstream nodes.
                         all_results[node_def.output] = out_val
+                    
                     self.progress_fn("node_done", f"  {nid} complete -> {node_def.output}")
                     return nid, None
                 except Exception as e:
