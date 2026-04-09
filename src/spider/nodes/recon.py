@@ -10,12 +10,13 @@ from spider.schemas import ReconResults
 
 
 class ReconSignature(dspy.Signature):
-    """Perform comprehensive reconnaissance on the target. Use all available
-    tools to discover hosts, open ports, service versions, and technologies.
-    Identify the full attack surface."""
+    """Perform comprehensive reconnaissance on the target.
+    
+    CRITICAL: Your final answer MUST be valid JSON matching the ReconResults schema.
+    No conversational text. No preambles. Just the data."""
 
     target: str = dspy.InputField(desc="Target IP or hostname to scan")
-    findings: ReconResults = dspy.OutputField()
+    recon_results: ReconResults = dspy.OutputField()
 
 
 class ReconModule(dspy.Module):
@@ -32,7 +33,7 @@ class ReconModule(dspy.Module):
 
         def recon_reward(args: dict, pred: dspy.Prediction) -> float:
             """Reward recon completeness: hosts + ports + services + tech."""
-            findings = pred.findings
+            findings = pred.recon_results
             score = 0.0
             if findings.hosts:
                 score += 0.3

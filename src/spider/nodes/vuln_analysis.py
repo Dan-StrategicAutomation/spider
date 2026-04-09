@@ -6,15 +6,16 @@ Exploit-DB to identify known vulnerabilities.
 
 import dspy
 
-from spider.schemas import VulnerabilityList
+from spider.schemas import ServiceDetails, VulnerabilityList, WebFindings
 
 
 class VulnAnalysisSignature(dspy.Signature):
-    """Analyze discovered services and web findings for known vulnerabilities.
-    Match to CVEs, check exploit availability, prioritize by CVSS and EPSS.
-    Include service versions and web application details in analysis."""
-    web_findings: str = dspy.InputField()
-    service_details: str = dspy.InputField()
+    """Analyze services and web findings for vulnerabilities.
+    
+    CRITICAL: Your final answer MUST be valid JSON matching the VulnerabilityList schema.
+    No conversational text. No preambles. Just the data."""
+    web_findings: WebFindings = dspy.InputField()
+    service_details: ServiceDetails = dspy.InputField()
     vulnerabilities: VulnerabilityList = dspy.OutputField()
 
 
@@ -45,7 +46,7 @@ class VulnerabilityAnalysisModule(dspy.Module):
             threshold=0.7,
         )
 
-    def forward(self, web_findings: str, service_details: str) -> dspy.Prediction:
+    def forward(self, web_findings: WebFindings, service_details: ServiceDetails) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):
             return self.analyzer(
                 web_findings=web_findings,

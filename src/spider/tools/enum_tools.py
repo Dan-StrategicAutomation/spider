@@ -11,6 +11,7 @@ def gobuster_scan(
     target: str,
     mode: str = "dir",
     wordlist: str = "/usr/share/wordlists/dirb/common.txt",
+    **kwargs,
 ) -> str:
     """Directory and file brute-forcing against web targets.
     Supports dir, dns, and vhost modes. Default uses common wordlist."""
@@ -29,6 +30,7 @@ def ffuf_scan(
     target: str,
     wordlist: str = "/usr/share/wordlists/dirb/common.txt",
     extensions: str = "php,html,txt",
+    **kwargs,
 ) -> str:
     """Fast web fuzzer for discovering hidden endpoints, parameters, and virtual
     hosts"""
@@ -44,7 +46,7 @@ def ffuf_scan(
     })
 
 
-def nikto_scan(target: str) -> str:
+def nikto_scan(target: str, **kwargs) -> str:
     """Web server vulnerability scanner. Checks for outdated software,
     dangerous files, configuration issues, and known vulnerabilities"""
     host = target if target.startswith("http") else f"http://{target}"
@@ -58,7 +60,7 @@ def nikto_scan(target: str) -> str:
     })
 
 
-def enum4linux(target: str) -> str:
+def enum4linux(target: str, **kwargs) -> str:
     """Windows/SMB enumeration -- users, shares, group memberships,
     password policies"""
     cmd = ["enum4linux", "-a", target]

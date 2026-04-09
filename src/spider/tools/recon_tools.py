@@ -7,7 +7,7 @@ import json
 import subprocess
 
 
-def nmap_scan(target: str, ports: str = "-T4 -sV -p-", args: str = "-sC") -> str:
+def nmap_scan(target: str, ports: str = "-T4 -sV -p-", args: str = "-sC", **kwargs) -> str:
     """Run nmap scan against target. Returns open ports, service versions, and OS
     detection. Use for comprehensive reconnaissance of a single host."""
     cmd = ["nmap"] + ports.split() + args.split() + ["-oX", "-", target]
@@ -20,7 +20,7 @@ def nmap_scan(target: str, ports: str = "-T4 -sV -p-", args: str = "-sC") -> str
     })
 
 
-def masscan_scan(target: str, ports: str = "1-65535", rate: str = "1000") -> str:
+def masscan_scan(target: str, ports: str = "1-65535", rate: str = "1000", **kwargs) -> str:
     """Run masscan for fast port scanning of targets or ranges. Finds open ports
     quickly, then hand off to nmap for service detection"""
     cmd = ["masscan", "-p", ports, target, "--rate", rate, "--output-format", "json"]
@@ -33,10 +33,10 @@ def masscan_scan(target: str, ports: str = "1-65535", rate: str = "1000") -> str
     })
 
 
-def whois_lookup(domain: str) -> str:
+def whois_lookup(target: str, **kwargs) -> str:
     """WHOIS database query for domain registration info, nameservers, contact
     details, and registration dates"""
-    cmd = ["whois", domain]
+    cmd = ["whois", target]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     return json.dumps({
         "success": result.returncode == 0,
@@ -45,26 +45,26 @@ def whois_lookup(domain: str) -> str:
     })
 
 
-def dns_enum(domain: str) -> str:
+def dns_enum(target: str, **kwargs) -> str:
     """DNS enumeration -- A, AAAA, MX, TXT, NS records. Identifies mail servers,
     SPF records, and DNS infrastructure"""
     records = ["A", "AAAA", "MX", "TXT", "NS", "SOA", "SRV"]
     results = {}
     for record in records:
         try:
-            cmd = ["dig", record, domain, "+short"]
+            cmd = ["dig", record, target, "+short"]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             results[record] = r.stdout.strip()
         except Exception as e:
             results[record] = f"Error: {e}"
     return json.dumps({
         "success": True,
-        "domain": domain,
+        "domain": target,
         "records": results,
     })
 
 
-def subdomain_enum(domain: str) -> str:
+def subdomain_enum(target: str, **kwargs) -> str:
     """Subdomain discovery via DNS brute-forcing with common subdomain wordlist.
     Checks for A and CNAME records for each candidate"""
     # Quick check using dig with common subdomains
@@ -73,16 +73,16 @@ def subdomain_enum(domain: str) -> str:
     found = []
     for sub in common:
         try:
-            cmd = ["dig", "+short", f"{sub}.{domain}"]
+            cmd = ["dig", "+short", f"{sub}.{target}"]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
             answer = r.stdout.strip()
             if answer:
-                found.append({"subdomain": f"{sub}.{domain}", "records": answer})
+                found.append({"subdomain": f"{sub}.{target}", "records": answer})
         except Exception:
             pass
     return json.dumps({
         "success": True,
-        "domain": domain,
+        "domain": target,
         "subdomains_found": found,
         "count": len(found),
     })

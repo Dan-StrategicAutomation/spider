@@ -10,16 +10,20 @@ from spider.schemas import ServiceDetails, WebFindings
 
 
 class WebEnumSignature(dspy.Signature):
-    """Enumerate web applications on discovered targets. Find directories,
-    parameters, technologies, and potential web vulnerabilities."""
-    recon_results: str = dspy.InputField()
+    """Enumerate web applications on discovered targets.
+    
+    CRITICAL: Your final answer MUST be valid JSON matching the WebFindings schema.
+    No conversational text. No preambles. Just the data."""
+    recon_results: ReconResults = dspy.InputField()
     web_findings: WebFindings = dspy.OutputField()
 
 
 class SvcEnumSignature(dspy.Signature):
-    """Probe discovered services for version info, configurations,
-    and default credential possibilities."""
-    recon_results: str = dspy.InputField()
+    """Probe discovered services for version info and configurations.
+    
+    CRITICAL: Your final answer MUST be valid JSON matching the ServiceDetails schema.
+    No conversational text."""
+    recon_results: ReconResults = dspy.InputField()
     service_details: ServiceDetails = dspy.OutputField()
 
 

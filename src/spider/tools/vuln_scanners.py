@@ -9,6 +9,7 @@ def nuclei_scan(
     target: str,
     templates: str = "",
     severity: str = "",
+    **kwargs,
 ) -> str:
     """Run nuclei vulnerability scan.
 
@@ -57,7 +58,7 @@ def nuclei_scan(
         })
 
 
-def nmap_nse(target: str, scripts: str = "vuln,exploit") -> str:
+def nmap_nse(target: str, scripts: str = "vuln,exploit", **kwargs) -> str:
     """Run nmap NSE scripts for vulnerability detection and default
     credential checks."""
     cmd = [
@@ -96,7 +97,7 @@ def nmap_nse(target: str, scripts: str = "vuln,exploit") -> str:
         })
 
 
-def trivy_scan(target: str, scan_type: str = "image") -> str:
+def trivy_scan(target: str, scan_type: str = "image", **kwargs) -> str:
     """Run trivy vulnerability scanner for container images and filesystems."""
     cmd = [
         "trivy",
