@@ -163,6 +163,17 @@ class SpiderOrchestrator:
         """
         session_id = f"run_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
+        # Phase 0: Scope Check
+        if self.scope_guard:
+            authorized, reason = self.scope_guard.authorize(target, "orchestrator_run")
+            if not authorized:
+                return {
+                    "success": False,
+                    "error": f"OUT_OF_SCOPE: {reason}",
+                    "session_id": session_id,
+                    "target": target,
+                }
+
         # Phase 1: Weave topology from goal and target
         self.progress_fn("weave", "Generating attack topology with DSPy weaver...")
         tool_names = ", ".join(

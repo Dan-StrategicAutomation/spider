@@ -35,8 +35,17 @@ class SelfEvaluator(dspy.Module):
 
     def forward(self, goal: str, node_type: str, pred: dspy.Prediction) -> float:
         output_val = str(pred)
-        result = self.judge(goal=goal, node_type=node_type, output=output_val)
-        return float(result.evaluation.score)
+        try:
+            result = self.judge(goal=goal, node_type=node_type, output=output_val)
+            # Use the wrap helper to handle cases where result.evaluation might 
+            # be a float or a dict instead of the QualityScore model
+            eval_obj = QualityScore.wrap(getattr(result, "evaluation", 0.0))
+            return float(eval_obj.score)
+        except Exception as e:
+            # Fallback for severe parsing failures
+            import sys
+            print(f"    [!] SelfEvaluator parsing failed: {e}", file=sys.stderr)
+            return 0.0
 
 
 class ReconReward:

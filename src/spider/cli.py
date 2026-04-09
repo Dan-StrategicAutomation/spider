@@ -115,6 +115,21 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
     info("Config loaded from .env / environment")
     info(f"Models available: {len(config.available_tools)} tools registered")
 
+    # Pre-flight environment check
+    from spider.tools.diagnostics import check_environment
+    diag_results = check_environment()
+    missing_req = [t for t in diag_results if t["required"] and not t["found"]]
+    if missing_req:
+        divider("ENVIRONMENT WARNING")
+        error("Critical security tools are missing from your PATH:")
+        for t in missing_req:
+            print(f"  {RED}- {t['name']}:{RESET} {t['description']}")
+        warn("Scans will likely fail. Please install these tools on your host.")
+    
+    missing_opt = [t for t in diag_results if not t["required"] and not t["found"]]
+    if missing_opt:
+        info(f"Optional tools missing: {', '.join([t['name'] for t in missing_opt])}")
+
     # Check Ollama
     if _ollama_available(config.ollama_base_url):
         success(f"Ollama running at {config.ollama_base_url}")
@@ -191,6 +206,13 @@ def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "
 
     try:
         result = orchestrator.run(goal=goal, target=target)
+        
+        # Check for orchestrator-level errors (e.g. scope)
+        if isinstance(result, dict) and result.get("error") and "OUT_OF_SCOPE" in str(result.get("error")):
+            error(f"Scan aborted: {result['error']}")
+            session_db.update_status(session_id, "failed")
+            return
+
         success(f"Scan complete. Session ID: {session_id}")
 
         # Save results
@@ -242,12 +264,16 @@ def new_scan(session_db, orchestrator):
         # User cancelled (e.g. Ctrl-C)
         return
 
-    # Check if target was scanned before
-    past = session_db.find_by_target(target)
-    if past:
-        warn(f"Target '{target}' has been scanned before ({len(past)} time(s)).")
-        if not confirm("Continue with a new scan?"):
-            return
+    # Check scope early for interactive authorization
+    if orchestrator.scope_guard:
+        authorized, reason = orchestrator.scope_guard.authorize(target, "cli_new_scan")
+        if not authorized:
+            warn(f"Target {target!r} is not in your configured scope.")
+            warn(f"Reason: {reason}")
+            if not confirm("Authorize this scan interactively for this session?"):
+                info("Scan cancelled.")
+                return
+            success(f"Target {target!r} authorized interactively.")
 
     # Create session
     session_id = session_db.create_session(target)
@@ -281,6 +307,13 @@ def new_scan(session_db, orchestrator):
 
     try:
         result = orchestrator.run(goal=goal, target=target)
+
+        # Check for orchestrator-level errors (e.g. scope)
+        if isinstance(result, dict) and result.get("error") and "OUT_OF_SCOPE" in str(result.get("error")):
+            error(f"Scan aborted: {result['error']}")
+            session_db.update_status(session_id, "failed")
+            return
+
         success(f"Scan complete. Session ID: {session_id}")
 
         # Save results

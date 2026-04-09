@@ -84,7 +84,11 @@ class GraphRunner(dspy.Module):
 
 
     def _get_module_inputs(self, node_id: str, all_results: dict[str, Any]) -> dict[str, Any]:
-        """Build input dict from signature's InputField definitions."""
+        """Build input dict from signature's InputField definitions.
+        
+        Strictly uses naming-based mapping. Root cause fixes in Weaver ensure
+        field names are canonical and aligned with signatures.
+        """
         module = self.node_modules[node_id]
         input_fields, _ = self._get_signature_fields(module)
 
@@ -120,8 +124,12 @@ class GraphRunner(dspy.Module):
                         if isinstance(result, dict)
                         else getattr(result, node_def.output, None)
                     )
+
                     if out_val is not None:
-                        all_results[node_def.output] = str(out_val)
+                        # Store in all_results using the topology's expected name.
+                        # Naming alignment is guaranteed by Weaver canonical registry.
+                        # DO NOT stringify. Preserve Pydantic model for downstream nodes.
+                        all_results[node_def.output] = out_val
                     self.progress_fn("node_done", f"  {nid} complete -> {node_def.output}")
                     return nid, None
                 except Exception as e:
