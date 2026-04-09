@@ -6,29 +6,32 @@ Both wrapped with dspy.Refine for quality improvement.
 
 import dspy
 
-from spider.schemas import ServiceDetails, WebFindings
+from spider.schemas import ReconResults, ServiceDetails, WebFindings
 
 
 class WebEnumSignature(dspy.Signature):
     """Enumerate web applications on discovered targets.
-    
+
     CRITICAL: Your final answer MUST be valid JSON matching the WebFindings schema.
     No conversational text. No preambles. Just the data."""
+
     recon_results: ReconResults = dspy.InputField()
     web_findings: WebFindings = dspy.OutputField()
 
 
 class SvcEnumSignature(dspy.Signature):
     """Probe discovered services for version info and configurations.
-    
+
     CRITICAL: Your final answer MUST be valid JSON matching the ServiceDetails schema.
     No conversational text."""
+
     recon_results: ReconResults = dspy.InputField()
     service_details: ServiceDetails = dspy.OutputField()
 
 
 class WebEnumerationModule(dspy.Module):
     """Web enumeration module with dspy.Refine."""
+
     def __init__(self, tools: list[dspy.Tool]):
         super().__init__()
         analyzer = dspy.ChainOfThought(WebEnumSignature)
@@ -60,6 +63,7 @@ class WebEnumerationModule(dspy.Module):
 
 class ServiceEnumerationModule(dspy.Module):
     """Service enumeration module with dspy.Refine."""
+
     def __init__(self, tools: list[dspy.Tool]):
         super().__init__()
         analyzer = dspy.ChainOfThought(SvcEnumSignature)

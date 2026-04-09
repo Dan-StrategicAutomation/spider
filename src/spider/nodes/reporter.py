@@ -6,7 +6,7 @@ technical details, attack chains, and remediation guidance.
 
 import dspy
 
-from spider.schemas import PentestReport
+from spider.schemas import AttackPlan, PentestReport, ReconResults, VulnerabilityList
 
 
 class ReporterSignature(dspy.Signature):
@@ -16,14 +16,16 @@ class ReporterSignature(dspy.Signature):
     - Attack chains discovered
     - Remediation recommendations
     - Methodology and timeline."""
-    recon_results: str = dspy.InputField()
-    vulnerabilities: str = dspy.InputField()
-    attack_plan: str = dspy.InputField()
+
+    recon_results: ReconResults = dspy.InputField()
+    vulnerabilities: VulnerabilityList = dspy.InputField()
+    attack_plan: AttackPlan = dspy.InputField()
     report: PentestReport = dspy.OutputField()
 
 
 class ReporterModule(dspy.Module):
     """Report generation module."""
+
     def __init__(self):
         super().__init__()
         generator = dspy.ChainOfThought(ReporterSignature)
@@ -52,8 +54,12 @@ class ReporterModule(dspy.Module):
             threshold=0.8,
         )
 
-    def forward(self, recon_results: str, vulnerabilities: str,
-                attack_plan: str) -> dspy.Prediction:
+    def forward(
+        self,
+        recon_results: ReconResults,
+        vulnerabilities: VulnerabilityList,
+        attack_plan: AttackPlan,
+    ) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):
             return self.generator(
                 recon_results=recon_results,

@@ -11,9 +11,10 @@ from spider.schemas import ServiceDetails, VulnerabilityList, WebFindings
 
 class VulnAnalysisSignature(dspy.Signature):
     """Analyze services and web findings for vulnerabilities.
-    
+
     CRITICAL: Your final answer MUST be valid JSON matching the VulnerabilityList schema.
     No conversational text. No preambles. Just the data."""
+
     web_findings: WebFindings = dspy.InputField()
     service_details: ServiceDetails = dspy.InputField()
     vulnerabilities: VulnerabilityList = dspy.OutputField()
@@ -21,6 +22,7 @@ class VulnAnalysisSignature(dspy.Signature):
 
 class VulnerabilityAnalysisModule(dspy.Module):
     """Vulnerability analysis module with dspy.Refine."""
+
     def __init__(self, tools: list[dspy.Tool]):
         super().__init__()
         analyzer = dspy.ChainOfThought(VulnAnalysisSignature)
@@ -46,7 +48,9 @@ class VulnerabilityAnalysisModule(dspy.Module):
             threshold=0.7,
         )
 
-    def forward(self, web_findings: WebFindings, service_details: ServiceDetails) -> dspy.Prediction:
+    def forward(
+        self, web_findings: WebFindings, service_details: ServiceDetails
+    ) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):
             return self.analyzer(
                 web_findings=web_findings,

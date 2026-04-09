@@ -6,14 +6,15 @@ for actual exploitation attempts.
 
 import dspy
 
-from spider.schemas import ExploitResult
+from spider.schemas import AttackPlan, ExploitResult
 
 
 class ExecutorSignature(dspy.Signature):
     """Execute exploitation attempts following the approved attack plan.
     Each step requires human approval before execution. Use available
     exploitation tools (sqlmap, hydra, metasploit) to gain access."""
-    attack_plan: str = dspy.InputField()
+
+    attack_plan: AttackPlan = dspy.InputField()
     target: str = dspy.InputField()
     exploit_result: ExploitResult = dspy.OutputField()
 
@@ -24,6 +25,7 @@ class ExecutorModule(dspy.Module):
     HITL gate is enforced outside this module -- the HITL gate checks
     each tool call before the ReAct agent can execute it.
     """
+
     def __init__(self, tools: list[dspy.Tool]):
         super().__init__()
         base = dspy.ReAct(ExecutorSignature, tools=tools, max_iters=10)
@@ -46,6 +48,6 @@ class ExecutorModule(dspy.Module):
             threshold=0.6,
         )
 
-    def forward(self, attack_plan: str, target: str) -> dspy.Prediction:
+    def forward(self, attack_plan: AttackPlan, target: str) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):
             return self.agent(attack_plan=attack_plan, target=target)

@@ -11,7 +11,7 @@ from spider.schemas import ReconResults
 
 class ReconSignature(dspy.Signature):
     """Perform comprehensive reconnaissance on the target.
-    
+
     CRITICAL: Your final answer MUST be valid JSON matching the ReconResults schema.
     No conversational text. No preambles. Just the data."""
 
