@@ -47,9 +47,7 @@ class SpiderTheme:
         self.status_complete = Style(color="#22C55E", bold=True)
         self.status_error = Style(color="#EF4444", bold=True)
         self.status_idle = Style(color="#6B7280")
-        self.severity_critical = Style(
-            color="#FF0000", bold=True, reverse=True
-        )
+        self.severity_critical = Style(color="#FF0000", bold=True, reverse=True)
         self.severity_high = Style(color="#EF4444", bold=True)
         self.severity_medium = Style(color="#F59E0B", bold=True)
         self.severity_low = Style(color="#3B82F6")
@@ -64,16 +62,22 @@ class SpiderTheme:
         self.panel_border = "#374151"
         self.panel_title = Style(color="#00D4FF", bold=True)
         self.panel_subtitle = Style(color="#8B5CF6")
-        self.table_header = Style(
-            color="#111827", bgcolor="#00D4FF", bold=True
-        )
+        self.table_header = Style(color="#111827", bgcolor="#00D4FF", bold=True)
         self.table_row_alt = Style(color="#E5E7EB", bgcolor="#1F2937")
         self.progress_bar = "#00D4FF"
         self.progress_complete = "#22C55E"
         self.progress_failed = "#EF4444"
         self.spinner_frames = [
-            "\u280b", "\u2819", "\u2839", "\u2838", "\u283c",
-            "\u2834", "\u2836", "\u2827", "\u2807", "\u280f",
+            "\u280b",
+            "\u2819",
+            "\u2839",
+            "\u2838",
+            "\u283c",
+            "\u2834",
+            "\u2836",
+            "\u2827",
+            "\u2807",
+            "\u280f",
         ]
         self.spinner_text = Style(color="#00D4FF", bold=True)
 
@@ -99,9 +103,7 @@ class SpiderTheme:
             inst.palette = palette
             inst.title = Style(color="#FFFFFF", bold=True)
             inst.subtitle = Style(color="#FFFF00", bold=True)
-            inst.header = Style(
-                color="#000000", bgcolor="#FFFFFF", bold=True
-            )
+            inst.header = Style(color="#000000", bgcolor="#FFFFFF", bold=True)
             inst.border_primary = "#FFFFFF"
             cls._cache["high_contrast"] = inst
         return cls._cache["high_contrast"]

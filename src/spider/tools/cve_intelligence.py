@@ -46,23 +46,20 @@ def _fetch_nvd(cpe: str, service: str, version: str) -> list[dict[str, Any]]:
                     if key in metrics:
                         entry = metrics[key][0]
                         cvss = entry.get("cvssData", {}).get("baseScore", 0.0)
-                        severity = entry.get("cvssData", {}).get(
-                            "baseSeverity", "NONE"
-                        )
+                        severity = entry.get("cvssData", {}).get("baseSeverity", "NONE")
                         break
 
-                refs = [
-                    r.get("url", "")
-                    for r in cve_item.get("references", [])
-                ]
+                refs = [r.get("url", "") for r in cve_item.get("references", [])]
 
-                cves.append({
-                    "cve_id": cve_id,
-                    "summary": desc,
-                    "cvss": cvss,
-                    "severity": severity,
-                    "references": refs[:5],
-                })
+                cves.append(
+                    {
+                        "cve_id": cve_id,
+                        "summary": desc,
+                        "cvss": cvss,
+                        "severity": severity,
+                        "references": refs[:5],
+                    }
+                )
             return cves
     except Exception:
         pass
@@ -74,9 +71,9 @@ def _fetch_kev(cve_ids: list[str]) -> dict[str, Any]:
     kev_lookup: dict[str, Any] = {}
     try:
         import httpx
+
         resp = httpx.get(
-            "https://www.cisa.gov/sites/default/files/feeds/"
-            "known_exploited_vulnerabilities.json",
+            "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
             timeout=15.0,
         )
         if resp.status_code == 200:
@@ -99,6 +96,7 @@ def _fetch_epss(cve_ids: list[str]) -> dict[str, float]:
     epss_lookup: dict[str, float] = {}
     try:
         import httpx
+
         for cve_id in cve_ids:
             resp = httpx.get(
                 "https://api.first.org/data/v1/epss",
@@ -128,12 +126,14 @@ def cve_intelligence(
     """
     cves = _fetch_nvd(cpe, service, version)
     if not cves:
-        return json.dumps({
-            "success": True,
-            "cves": [],
-            "total": 0,
-            "note": f"No CVEs found for {service} {version}",
-        })
+        return json.dumps(
+            {
+                "success": True,
+                "cves": [],
+                "total": 0,
+                "note": f"No CVEs found for {service} {version}",
+            }
+        )
 
     cve_ids = [c["cve_id"] for c in cves]
 
@@ -151,16 +151,19 @@ def cve_intelligence(
 
     cves.sort(key=lambda c: (c["in_kev"], c["cvss"], c["epss"]), reverse=True)
 
-    return json.dumps({
-        "success": True,
-        "cves": cves,
-        "total": len(cves),
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "cves": cves,
+            "total": len(cves),
+        }
+    )
 
 
 def register_all(scope_guard=None, audit_logger=None):
     """Register CVE intelligence tools with the adapter."""
     from spider.tools.adapter import make_tool
+
     return {
         "cve_intelligence": make_tool(
             cve_intelligence,

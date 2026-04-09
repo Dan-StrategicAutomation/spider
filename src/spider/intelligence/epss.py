@@ -15,6 +15,7 @@ def _get_epss_score_cached(cve_id: str) -> float:
     # but this wrapper prevents the B019 lint error.
     return 0.0
 
+
 class EPSSClient:
     """FIRST EPSS (Exploit Prediction Scoring System) API client."""
 

@@ -14,6 +14,7 @@ class SelfEvalSignature(dspy.Signature):
     - Are findings specific and actionable (not vague)?
     - Is there sufficient evidence/detail to support claims?
     - Would a human pentester consider this result useful?"""
+
     goal: str = dspy.InputField()
     node_type: str = dspy.InputField(
         desc="Type of pentest node: recon, vuln_analysis, exploit_plan, report"
@@ -24,6 +25,7 @@ class SelfEvalSignature(dspy.Signature):
 
 class SelfEvaluator(dspy.Module):
     """DSPy-native quality evaluator for pentest node outputs."""
+
     def __init__(self):
         super().__init__()
         self.judge = dspy.ChainOfThought(SelfEvalSignature)
@@ -37,19 +39,21 @@ class SelfEvaluator(dspy.Module):
         output_val = str(pred)
         try:
             result = self.judge(goal=goal, node_type=node_type, output=output_val)
-            # Use the wrap helper to handle cases where result.evaluation might 
+            # Use the wrap helper to handle cases where result.evaluation might
             # be a float or a dict instead of the QualityScore model
             eval_obj = QualityScore.wrap(getattr(result, "evaluation", 0.0))
             return float(eval_obj.score)
         except Exception as e:
             # Fallback for severe parsing failures
             import sys
+
             print(f"    [!] SelfEvaluator parsing failed: {e}", file=sys.stderr)
             return 0.0
 
 
 class ReconReward:
     """Deterministic reward for recon phase completeness."""
+
     def __call__(self, args: dict, pred: dspy.Prediction) -> float:
         findings = pred.findings
         score = 0.0
@@ -66,6 +70,7 @@ class ReconReward:
 
 class VulnAnalysisReward:
     """Reward for vulnerability analysis quality."""
+
     def __call__(self, args: dict, pred: dspy.Prediction) -> float:
         vulns = pred.vulnerabilities
         if not vulns:
@@ -82,6 +87,7 @@ class VulnAnalysisReward:
 
 class ExploitPlanReward:
     """Reward for attack chain feasibility and completeness."""
+
     def __call__(self, args: dict, pred: dspy.Prediction) -> float:
         chains = pred.attack_chains
         if not chains:

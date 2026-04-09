@@ -1,8 +1,9 @@
 """Observability module -- handles Langfuse and DSPy instrumentation."""
 
 import os
-from loguru import logger
+
 from langfuse import get_client
+from loguru import logger
 from openinference.instrumentation.dspy import DSPyInstrumentor
 
 from spider.config import SpiderConfig

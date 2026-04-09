@@ -28,7 +28,7 @@ REQUIRED_TOOLS = [
 
 def check_environment() -> list[dict]:
     """Check if required binaries are available in the system PATH.
-    
+
     Returns a list of status dictionaries.
     """
     results = []
@@ -42,16 +42,20 @@ def check_environment() -> list[dict]:
             "required": tool.required,
             "description": tool.description,
         }
-        
+
         # Additional check for version if found
         if path:
             try:
                 # Most tools support --version or -h
                 v_arg = "-v" if tool.name == "nikto" else "--version"
-                proc = subprocess.run([tool.binary, v_arg], capture_output=True, text=True, timeout=2)
-                status["version"] = proc.stdout.split('\n')[0].strip() or proc.stderr.split('\n')[0].strip()
+                proc = subprocess.run(
+                    [tool.binary, v_arg], capture_output=True, text=True, timeout=2
+                )
+                stdout_first = proc.stdout.split("\n")[0].strip()
+                stderr_first = proc.stderr.split("\n")[0].strip()
+                status["version"] = stdout_first or stderr_first
             except Exception:
                 status["version"] = "unknown"
-        
+
         results.append(status)
     return results

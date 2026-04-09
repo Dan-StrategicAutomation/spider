@@ -93,10 +93,7 @@ class HITLGate:
 
         cve_line = f"CVE: {cve_id}\n" if cve_id else ""
         answer = questionary.confirm(
-            f"EXECUTE: {action} -> {target} (risk: {risk_level})\n"
-            f"{cve_line}"
-            f"{details}\n"
-            f"Approve?",
+            f"EXECUTE: {action} -> {target} (risk: {risk_level})\n{cve_line}{details}\nApprove?",
             default=False,
         ).ask()
 

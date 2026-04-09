@@ -11,10 +11,10 @@ import questionary
 from spider.config import SpiderConfig
 from spider.engine.orchestrator import SpiderOrchestrator
 from spider.models import _ollama_available, configure_spider
+from spider.observability import setup_observability
 from spider.sandbox.audit_logger import AuditLogger
 from spider.sandbox.hitl_gate import HITLGate
 from spider.sandbox.scope_guard import ScopeGuard
-from spider.observability import setup_observability
 from spider.schemas import validate_target_syntax
 
 # ── Colors ──────────────────────────────────────────────────────────────
@@ -117,6 +117,7 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
 
     # Pre-flight environment check
     from spider.tools.diagnostics import check_environment
+
     diag_results = check_environment()
     missing_req = [t for t in diag_results if t["required"] and not t["found"]]
     if missing_req:
@@ -125,7 +126,7 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
         for t in missing_req:
             print(f"  {RED}- {t['name']}:{RESET} {t['description']}")
         warn("Scans will likely fail. Please install these tools on your host.")
-    
+
     missing_opt = [t for t in diag_results if not t["required"] and not t["found"]]
     if missing_opt:
         info(f"Optional tools missing: {', '.join([t['name'] for t in missing_opt])}")
@@ -206,10 +207,11 @@ def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "
 
     try:
         result = orchestrator.run(goal=goal, target=target)
-        
+
         # Check for orchestrator-level errors (e.g. scope)
-        if isinstance(result, dict) and result.get("error") and "OUT_OF_SCOPE" in str(result.get("error")):
-            error(f"Scan aborted: {result['error']}")
+        err = result.get("error") if isinstance(result, dict) else None
+        if err and "OUT_OF_SCOPE" in str(err):
+            error(f"Scan aborted: {err}")
             session_db.update_status(session_id, "failed")
             return
 
@@ -221,6 +223,7 @@ def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "
 
         # Ensure traces are pushed to Langfuse
         from spider.observability import flush_observability
+
         flush_observability()
 
         # Show findings summary
@@ -255,10 +258,7 @@ def new_scan(session_db, orchestrator):
             "(e.g., 127.0.0.1 or target.com)."
         )
 
-    target = questionary.text(
-        "Enter target IP or domain:",
-        validate=target_validator
-    ).ask()
+    target = questionary.text("Enter target IP or domain:", validate=target_validator).ask()
 
     if not target:
         # User cancelled (e.g. Ctrl-C)
@@ -309,8 +309,9 @@ def new_scan(session_db, orchestrator):
         result = orchestrator.run(goal=goal, target=target)
 
         # Check for orchestrator-level errors (e.g. scope)
-        if isinstance(result, dict) and result.get("error") and "OUT_OF_SCOPE" in str(result.get("error")):
-            error(f"Scan aborted: {result['error']}")
+        err = result.get("error") if isinstance(result, dict) else None
+        if err and "OUT_OF_SCOPE" in str(err):
+            error(f"Scan aborted: {err}")
             session_db.update_status(session_id, "failed")
             return
 
@@ -322,6 +323,7 @@ def new_scan(session_db, orchestrator):
 
         # Ensure traces are pushed to Langfuse
         from spider.observability import flush_observability
+
         flush_observability()
 
         # Show findings

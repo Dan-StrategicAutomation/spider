@@ -19,7 +19,7 @@ class TopologyEvalSignature(dspy.Signature):
     - At least 3 nodes for a meaningful pentest
     - HITL gate flags set on exploitation nodes
     - CANONICAL NAMING: Nodes must use standard field names for common tasks:
-        (recon -> recon_results, web_enum -> web_findings, svc_enum -> service_details, 
+        (recon -> recon_results, web_enum -> web_findings, svc_enum -> service_details,
          vuln_analysis -> vulnerabilities, exploit_planner -> attack_plan, reporter -> report)"""
 
     goal: str = dspy.InputField()
@@ -40,9 +40,9 @@ class TopologyEvaluator(dspy.Module):
 
 
 class GraphWeaverSignature(dspy.Signature):
-    """Design a multi-agent pentest graph topology. 
+    """Design a multi-agent pentest graph topology.
     The first node MUST be role: react (recon always starts with active reconnaissance).
-    
+
     CRITICAL: You MUST use CANONICAL field names for standard outputs:
     - reconnaissance outputs -> recon_results
     - web app enumeration outputs -> web_findings
@@ -50,7 +50,7 @@ class GraphWeaverSignature(dspy.Signature):
     - vulnerability analysis outputs -> vulnerabilities
     - exploit planning outputs -> attack_plan
     - reporting outputs -> report
-    
+
     Must be a DAG. NO cycles. Edges flow FORWARD only.
     Include HITL nodes for exploitation steps."""
 
@@ -103,7 +103,6 @@ class GraphWeaver(dspy.Module):
             self.progress_fn = progress_fn
         with dspy.settings.context(temperature=0.1):
             return self.weave(goal=goal, **kwargs)
-
 
 
 def build_default_topology() -> GraphTopology:

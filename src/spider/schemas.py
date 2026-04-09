@@ -23,26 +23,27 @@ class ScanPhase(StrEnum):
 
 # ── Recon Schemas ────────────────────────────────────────────────────────────
 
+
 class PortInfo(BaseModel):
-    port: int = Field(ge=1, le=65535)
-    protocol: str  # "tcp", "udp"
-    state: str  # "open", "closed", "filtered"
-    service: str  # "http", "ssh", "mysql", etc.
+    port: int = Field(default=0, ge=0, le=65535)
+    protocol: str = ""  # "tcp", "udp"
+    state: str = ""  # "open", "closed", "filtered"
+    service: str = ""  # "http", "ssh", "mysql", etc.
     version: str = ""
     extra: str = ""
 
 
 class ServiceInfo(BaseModel):
-    name: str
+    name: str = ""
     version: str = ""
     port: int = 0
     extra: str = ""
 
 
 class TechInfo(BaseModel):
-    name: str
+    name: str = ""
     version: str = ""
-    category: str  # "webserver", "framework", "language", "cms", "database"
+    category: str = ""  # "webserver", "framework", "language", "cms", "database"
     confidence: float = Field(ge=0.0, le=1.0, default=1.0)
 
 
@@ -56,17 +57,19 @@ class ReconResults(BaseModel):
 
 # ── Enumeration Schemas ──────────────────────────────────────────────────────
 
+
 class WebParamInfo(BaseModel):
-    url: str
-    method: str  # "GET", "POST", etc.
-    param_name: str
-    param_type: str  # "query", "body", "cookie", "header"
+    url: str = ""
+    method: str = "GET"  # "GET", "POST", etc.
+    param_name: str = ""
+    param_type: str = "query"  # "query", "body", "cookie", "header"
     potential_vulns: list[str] = Field(default_factory=list)
 
 
 class DirectoryEntry(BaseModel):
-    path: str
-    status_code: int
+    path: str = ""
+    status_code: int = 0
+
     content_type: str = ""
     size: int = 0
 
@@ -80,7 +83,8 @@ class WebFindings(BaseModel):
 
 
 class ServiceDetails(BaseModel):
-    service_name: str
+    service_name: str = ""
+
     version: str = ""
     config_info: str = ""
     default_credentials_possible: bool = False
@@ -90,13 +94,15 @@ class ServiceDetails(BaseModel):
 
 # ── Vulnerability Schemas ────────────────────────────────────────────────────
 
+
 class CVEFinding(BaseModel):
-    cve_id: str
+    cve_id: str = ""
     cvss_score: float = Field(ge=0.0, le=10.0, default=0.0)
-    severity: str  # CRITICAL, HIGH, MEDIUM, LOW
+    severity: str = "NONE"  # CRITICAL, HIGH, MEDIUM, LOW
     epss_score: float = Field(ge=0.0, le=1.0, default=0.0)
     in_kev: bool = False
     has_public_exploit: bool = False
+
     summary: str = ""
     references: list[str] = Field(default_factory=list)
 
@@ -110,9 +116,10 @@ class CVEFinding(BaseModel):
 
 
 class ExploitMatch(BaseModel):
-    exploit_id: str
-    source: str  # "exploit-db", "metasploit", "github-poc"
-    title: str
+    exploit_id: str = ""
+    source: str = ""  # "exploit-db", "metasploit", "github-poc"
+    title: str = ""
+
     platform: str = ""
     reliability: str = "average"  # "excellent", "good", "average", "manual"
     privileges_required: str = ""
@@ -123,7 +130,8 @@ class ExploitMatch(BaseModel):
 
 
 class VulnerabilityInfo(BaseModel):
-    cve: CVEFinding
+    cve: CVEFinding = Field(default_factory=CVEFinding)
+
     affected_service: str = ""
     affected_version: str = ""
     matched_exploits: list[ExploitMatch] = Field(default_factory=list)
@@ -139,10 +147,12 @@ class VulnerabilityList(BaseModel):
 
 # ── Exploit Planning Schemas ─────────────────────────────────────────────────
 
+
 class AttackStep(BaseModel):
-    step_number: int
-    action: str
-    tool: str
+    step_number: int = 0
+    action: str = ""
+    tool: str = ""
+
     cve_id: str | None = None
     expected_outcome: str = ""
     hitl_required: bool = True
@@ -175,6 +185,7 @@ class AttackPlan(BaseModel):
 
 # ── Exploitation Schemas ─────────────────────────────────────────────────────
 
+
 class ExploitResult(BaseModel):
     success: bool = False
     access_level: str = ""  # "user", "admin", "system", "root"
@@ -186,6 +197,7 @@ class ExploitResult(BaseModel):
 
 # ── Post-Exploitation Schemas ────────────────────────────────────────────────
 
+
 class PostExploitResult(BaseModel):
     success: bool = False
     escalation_achieved: str = ""  # "none", "user", "admin", "root"
@@ -196,11 +208,13 @@ class PostExploitResult(BaseModel):
 
 # ── Reporting Schemas ────────────────────────────────────────────────────────
 
+
 class ExecutiveSummary(BaseModel):
-    overall_risk: str = ""
+    overall_risk: str = "NONE"
     critical_findings_count: int = 0
     high_findings_count: int = 0
     attack_paths_discovered: int = 0
+
     summary_text: str = ""
 
 
@@ -227,6 +241,7 @@ class PentestReport(BaseModel):
 
 
 # ── Topology Schemas (Graph Definition) ──────────────────────────────────────
+
 
 class NodeRole(StrEnum):
     CHAIN_OF_THOUGHT = "chain_of_thought"
@@ -294,6 +309,7 @@ class GraphTopology(BaseModel):
 
 
 # ── Evaluation / Helper Schemas ──────────────────────────────────────────────
+
 
 class QualityScore(BaseModel):
     score: float = Field(ge=0.0, le=1.0, description="Quality score 0-1")

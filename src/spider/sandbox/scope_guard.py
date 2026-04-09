@@ -29,6 +29,7 @@ class ScopeGuard:
 
         if lab_network:
             import contextlib
+
             with contextlib.suppress(ValueError):
                 self._lab_network = ipaddress.IPv4Network(lab_network, strict=False)
 

@@ -72,9 +72,9 @@ class AttackGraphScreen(Screen):
             border = style_for_risk(risk)
 
             lines.append(f"[bold {border}]{name}[/bold {border}]")
-            lines.append(f"  Risk: {risk.upper()} | "
-                         f"Feasibility: {feasibility:.2f} | "
-                         f"Stealth: {stealth:.2f}")
+            lines.append(
+                f"  Risk: {risk.upper()} | Feasibility: {feasibility:.2f} | Stealth: {stealth:.2f}"
+            )
             lines.append("")
 
             steps = chain.get("steps", [])
@@ -114,15 +114,9 @@ class AttackGraphScreen(Screen):
                 border_style=THEME.border_primary,
             )
 
-        total_steps = sum(
-            len(chain.get("steps", []))
-            for chain in self._session.attack_chain
-        )
+        total_steps = sum(len(chain.get("steps", [])) for chain in self._session.attack_chain)
         hitl_count = sum(
-            sum(
-                1 for step in chain.get("steps", [])
-                if step.get("hitl_required")
-            )
+            sum(1 for step in chain.get("steps", []) if step.get("hitl_required"))
             for chain in self._session.attack_chain
         )
         unique_cves = set()

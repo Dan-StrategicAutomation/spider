@@ -18,18 +18,22 @@ def attack_chain_builder(
         try:
             vulns = json.loads(vulnerabilities)
         except json.JSONDecodeError:
-            return json.dumps({
-                "success": False,
-                "error": "Invalid vulnerabilities JSON",
-            })
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": "Invalid vulnerabilities JSON",
+                }
+            )
 
     if not vulns:
-        return json.dumps({
-            "success": True,
-            "chains": [],
-            "total": 0,
-            "note": "No vulnerabilities provided",
-        })
+        return json.dumps(
+            {
+                "success": True,
+                "chains": [],
+                "total": 0,
+                "note": "No vulnerabilities provided",
+            }
+        )
 
     chains = []
     chain_id = 1
@@ -42,15 +46,17 @@ def attack_chain_builder(
         step_num = 1
         steps = []
         for v in high_vulns[:3]:
-            steps.append({
-                "step_number": step_num,
-                "action": f"Exploit {v.get('cve_id', 'unknown')}",
-                "tool": "metasploit",
-                "cve_id": v.get("cve_id"),
-                "expected_outcome": "Initial access via high-severity vulnerability",
-                "hitl_required": True,
-                "risk_level": "critical",
-            })
+            steps.append(
+                {
+                    "step_number": step_num,
+                    "action": f"Exploit {v.get('cve_id', 'unknown')}",
+                    "tool": "metasploit",
+                    "cve_id": v.get("cve_id"),
+                    "expected_outcome": "Initial access via high-severity vulnerability",
+                    "hitl_required": True,
+                    "risk_level": "critical",
+                }
+            )
             step_num += 1
 
         chain = {
@@ -69,15 +75,17 @@ def attack_chain_builder(
         step_num = 1
         steps = []
         for v in med_vulns[:3]:
-            steps.append({
-                "step_number": step_num,
-                "action": f"Exploit {v.get('cve_id', 'unknown')}",
-                "tool": "nuclei",
-                "cve_id": v.get("cve_id"),
-                "expected_outcome": "Access via medium-severity vulnerability",
-                "hitl_required": True,
-                "risk_level": "high",
-            })
+            steps.append(
+                {
+                    "step_number": step_num,
+                    "action": f"Exploit {v.get('cve_id', 'unknown')}",
+                    "tool": "nuclei",
+                    "cve_id": v.get("cve_id"),
+                    "expected_outcome": "Access via medium-severity vulnerability",
+                    "hitl_required": True,
+                    "risk_level": "high",
+                }
+            )
             step_num += 1
 
         chain = {
@@ -92,16 +100,19 @@ def attack_chain_builder(
         chains.append(chain)
         chain_id += 1
 
-    return json.dumps({
-        "success": True,
-        "chains": chains,
-        "total": len(chains),
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "chains": chains,
+            "total": len(chains),
+        }
+    )
 
 
 def register_all(scope_guard=None, audit_logger=None):
     """Register attack chain builder with the adapter."""
     from spider.tools.adapter import make_tool
+
     return {
         "attack_chain_builder": make_tool(
             attack_chain_builder,

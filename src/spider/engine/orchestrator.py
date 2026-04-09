@@ -47,7 +47,6 @@ class SpiderOrchestrator:
         self.audit_logger = audit_logger
         self._all_tools: dict[str, dspy.Tool] = {}
 
-
     def _build_tools(
         self,
         scope_guard: ScopeGuard | None = None,
@@ -101,47 +100,38 @@ class SpiderOrchestrator:
             node_role = node.role
             node_id = node.id
 
+            # Filter tools specifically for this node based on weaver topology
+            node_tools = [tools[t.name] for t in node.tools if t.name in tools]
+
             if node_role == NodeRole.REACT:
                 if "recon" in node_id.lower():
-                    tools_list = [
-                        tools["nmap_scan"],
-                        tools["whois_lookup"],
-                        tools["dns_enum"],
-                        tools["subdomain_enum"],
-                    ]
-                    node_modules[node_id] = ReconModule(tools=tools_list)
+                    node_modules[node_id] = ReconModule(tools=node_tools)
                 elif "enum" in node_id.lower():
-                    tools_list = [
-                        tools["gobuster_scan"],
-                        tools["ffuf_scan"],
-                        tools["nikto_scan"],
-                    ]
-                    node_modules[node_id] = WebEnumerationModule(tools=tools_list)
+                    node_modules[node_id] = WebEnumerationModule(tools=node_tools)
                 else:
-                    tools_list = list(tools.values())
-                    node_modules[node_id] = ReconModule(tools=tools_list)
+                    node_modules[node_id] = ReconModule(tools=node_tools)
             elif node_role == NodeRole.CHAIN_OF_THOUGHT:
                 if "vuln" in node_id.lower():
-                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=list(tools.values()))
+                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=node_tools)
                 elif "exploit" in node_id.lower() or "plan" in node_id.lower():
-                    node_modules[node_id] = ExploitPlanningModule(tools=list(tools.values()))
+                    node_modules[node_id] = ExploitPlanningModule(tools=node_tools)
                 elif "report" in node_id.lower():
-                    node_modules[node_id] = ReporterModule(tools=list(tools.values()))
+                    node_modules[node_id] = ReporterModule(tools=node_tools)
                 else:
-                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=list(tools.values()))
+                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=node_tools)
             else:
                 from spider.nodes.executor import ExecutorModule
                 from spider.nodes.post_exploit import PostExploitationModule
 
                 if "post" in node_id.lower() or "elevate" in node_id.lower():
-                    node_modules[node_id] = PostExploitationModule(tools=list(tools.values()))
+                    node_modules[node_id] = PostExploitationModule(tools=node_tools)
                 elif "exec" in node_id.lower():
                     node_modules[node_id] = ExecutorModule(
-                        tools=list(tools.values()),
+                        tools=node_tools,
                         hitl_gate=self.hitl_gate,
                     )
                 else:
-                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=list(tools.values()))
+                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=node_tools)
 
         return node_modules
 

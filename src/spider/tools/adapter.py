@@ -16,33 +16,37 @@ def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300):
 
     Returns a dspy.Tool that can be passed to dspy.ReAct.
     """
+
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
         # 1. Scope check
-        # Look for target, domain, or host in kwargs for scope validation
+        # Look for target, domain, or host in kwargs or as first positional argument
         candidate_target = kwargs.get("target") or kwargs.get("domain") or kwargs.get("host")
-        
+        if not candidate_target and len(args) > 0 and isinstance(args[0], str):
+            candidate_target = args[0]
+
         if scope_guard and candidate_target:
             authorized, reason = scope_guard.authorize(candidate_target, func.__name__)
             if not authorized:
-                return json.dumps({
-                    "error": f"OUT_OF_SCOPE: {reason}",
-                    "tool": func.__name__,
-                    "authorized": False,
-                })
+                return json.dumps(
+                    {
+                        "error": f"OUT_OF_SCOPE: {reason}",
+                        "tool": func.__name__,
+                        "target": candidate_target,
+                        "authorized": False,
+                    }
+                )
 
         # 2. Audit log start
         if audit_logger:
             audit_logger.log(
                 action=func.__name__,
-                target=kwargs.get("target", "unknown"),
+                target=candidate_target or "unknown",
                 phase="started",
                 params={k: v for k, v in kwargs.items() if k != "target"},
             )
 
         # 3. Execute with timeout
-        # We pass all kwargs directly. Resilience is handled by the tool 
-        # definition having **kwargs.
         try:
             result = func(*args, **kwargs)
             phase = "completed"
@@ -57,7 +61,7 @@ def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300):
         if audit_logger:
             audit_logger.log(
                 action=func.__name__,
-                target=kwargs.get("target", "unknown"),
+                target=candidate_target or "unknown",
                 phase=phase,
                 result=result[:500] if isinstance(result, str) else "",
             )
@@ -79,6 +83,7 @@ def make_tool_from_cmd(
 
     The command list uses {placeholder} syntax for parameter substitution.
     """
+
     def run(**kwargs) -> str:
         # 1. Look for target, domain, or host in kwargs for scope validation
         candidate_target = kwargs.get("target") or kwargs.get("domain") or kwargs.get("host")
@@ -101,15 +106,15 @@ def make_tool_from_cmd(
 
         # 4. Execution
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=timeout
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            output = json.dumps(
+                {
+                    "success": result.returncode == 0,
+                    "stdout": result.stdout[:10000],
+                    "stderr": result.stderr[:2000],
+                    "exit_code": result.returncode,
+                }
             )
-            output = json.dumps({
-                "success": result.returncode == 0,
-                "stdout": result.stdout[:10000],
-                "stderr": result.stderr[:2000],
-                "exit_code": result.returncode,
-            })
             phase = "completed" if result.returncode == 0 else "error"
         except subprocess.TimeoutExpired:
             output = json.dumps({"error": "TIMEOUT", "limit": timeout})

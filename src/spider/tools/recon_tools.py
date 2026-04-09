@@ -12,12 +12,14 @@ def nmap_scan(target: str, ports: str = "-T4 -sV -p-", args: str = "-sC", **kwar
     detection. Use for comprehensive reconnaissance of a single host."""
     cmd = ["nmap"] + ports.split() + args.split() + ["-oX", "-", target]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-    return json.dumps({
-        "success": result.returncode == 0,
-        "xml_output": result.stdout[:50000],
-        "errors": result.stderr[:2000],
-        "exit_code": result.returncode,
-    })
+    return json.dumps(
+        {
+            "success": result.returncode == 0,
+            "xml_output": result.stdout[:50000],
+            "errors": result.stderr[:2000],
+            "exit_code": result.returncode,
+        }
+    )
 
 
 def masscan_scan(target: str, ports: str = "1-65535", rate: str = "1000", **kwargs) -> str:
@@ -25,12 +27,14 @@ def masscan_scan(target: str, ports: str = "1-65535", rate: str = "1000", **kwar
     quickly, then hand off to nmap for service detection"""
     cmd = ["masscan", "-p", ports, target, "--rate", rate, "--output-format", "json"]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    return json.dumps({
-        "success": result.returncode == 0,
-        "output": result.stdout[:50000],
-        "errors": result.stderr[:2000],
-        "exit_code": result.returncode,
-    })
+    return json.dumps(
+        {
+            "success": result.returncode == 0,
+            "output": result.stdout[:50000],
+            "errors": result.stderr[:2000],
+            "exit_code": result.returncode,
+        }
+    )
 
 
 def whois_lookup(target: str, **kwargs) -> str:
@@ -38,11 +42,13 @@ def whois_lookup(target: str, **kwargs) -> str:
     details, and registration dates"""
     cmd = ["whois", target]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    return json.dumps({
-        "success": result.returncode == 0,
-        "output": result.stdout[:10000],
-        "exit_code": result.returncode,
-    })
+    return json.dumps(
+        {
+            "success": result.returncode == 0,
+            "output": result.stdout[:10000],
+            "exit_code": result.returncode,
+        }
+    )
 
 
 def dns_enum(target: str, **kwargs) -> str:
@@ -57,19 +63,36 @@ def dns_enum(target: str, **kwargs) -> str:
             results[record] = r.stdout.strip()
         except Exception as e:
             results[record] = f"Error: {e}"
-    return json.dumps({
-        "success": True,
-        "domain": target,
-        "records": results,
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "domain": target,
+            "records": results,
+        }
+    )
 
 
 def subdomain_enum(target: str, **kwargs) -> str:
     """Subdomain discovery via DNS brute-forcing with common subdomain wordlist.
     Checks for A and CNAME records for each candidate"""
     # Quick check using dig with common subdomains
-    common = ["www", "mail", "ftp", "admin", "dev", "api", "staging", "test",
-              "beta", "prod", "internal", "portal", "app", "db", "git"]
+    common = [
+        "www",
+        "mail",
+        "ftp",
+        "admin",
+        "dev",
+        "api",
+        "staging",
+        "test",
+        "beta",
+        "prod",
+        "internal",
+        "portal",
+        "app",
+        "db",
+        "git",
+    ]
     found = []
     for sub in common:
         try:
@@ -80,17 +103,20 @@ def subdomain_enum(target: str, **kwargs) -> str:
                 found.append({"subdomain": f"{sub}.{target}", "records": answer})
         except Exception:
             pass
-    return json.dumps({
-        "success": True,
-        "domain": target,
-        "subdomains_found": found,
-        "count": len(found),
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "domain": target,
+            "subdomains_found": found,
+            "count": len(found),
+        }
+    )
 
 
 def register_all(scope_guard=None, audit_logger=None):
     """Register all recon tools via the adapter."""
     from spider.tools.adapter import make_tool
+
     return {
         "nmap_scan": make_tool(nmap_scan, scope_guard=scope_guard, audit_logger=audit_logger),
         "masscan_scan": make_tool(masscan_scan, scope_guard=scope_guard, audit_logger=audit_logger),

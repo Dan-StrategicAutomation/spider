@@ -81,9 +81,7 @@ class DashboardScreen(Screen):
                 ),
                 VerticalScroll(
                     Static(self._render_attack_chain_panel, id="chain-panel"),
-                    Static(
-                        self._render_reasoning_panel, id="reasoning-panel"
-                    ),
+                    Static(self._render_reasoning_panel, id="reasoning-panel"),
                     id="right-col",
                 ),
             ),
@@ -116,9 +114,7 @@ class DashboardScreen(Screen):
         status = self.query_one("#status-bar", LiveStatusBar)
         if self._session:
             status.phase_text = self._session.current_phase.value.upper()
-            progress = self._session.phase_progress.get(
-                self._session.current_phase.value, 0.0
-            )
+            progress = self._session.phase_progress.get(self._session.current_phase.value, 0.0)
             status.progress_val = progress
             if self._session.llm_reasoning:
                 count = len(self._session.llm_reasoning)
@@ -263,14 +259,10 @@ class DashboardScreen(Screen):
         for entry in entries:
             ts = entry.timestamp[:19] if hasattr(entry, "timestamp") else ""
             action = (
-                entry.action
-                if hasattr(entry, "action")
-                else entry.get("action", "?")  # type: ignore[union-attr]
+                entry.action if hasattr(entry, "action") else entry.get("action", "?")  # type: ignore[union-attr]
             )
             target = (
-                entry.target
-                if hasattr(entry, "target")
-                else entry.get("target", "?")  # type: ignore[union-attr]
+                entry.target if hasattr(entry, "target") else entry.get("target", "?")  # type: ignore[union-attr]
             )
             hitl_tag = " [HITL]" if entry.hitl_approved else ""
             lines.append(f"[{ts}] {action} -> {target}{hitl_tag}")

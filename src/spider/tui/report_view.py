@@ -37,9 +37,7 @@ class ReportScreen(Screen):
             VerticalScroll(
                 Static(self._render_report_header, id="report-header"),
                 Static(self._render_executive_summary, id="report-summary"),
-                Static(
-                    self._render_findings_summary, id="report-findings"
-                ),
+                Static(self._render_findings_summary, id="report-findings"),
                 Static(self._render_attack_chains_summary, id="report-chains"),
                 Static(self._render_recommendations, id="report-recommendations"),
                 id="report-body",
@@ -80,18 +78,9 @@ class ReportScreen(Screen):
             )
         s = self._session
         total = len(s.findings)
-        critical = sum(
-            1 for f in s.findings
-            if f.get("severity", "").upper() == "CRITICAL"
-        )
-        high = sum(
-            1 for f in s.findings
-            if f.get("severity", "").upper() == "HIGH"
-        )
-        medium = sum(
-            1 for f in s.findings
-            if f.get("severity", "").upper() == "MEDIUM"
-        )
+        critical = sum(1 for f in s.findings if f.get("severity", "").upper() == "CRITICAL")
+        high = sum(1 for f in s.findings if f.get("severity", "").upper() == "HIGH")
+        medium = sum(1 for f in s.findings if f.get("severity", "").upper() == "MEDIUM")
         chains = len(s.attack_chain)
         lines = [
             f"Total Findings: {total}",
@@ -185,9 +174,7 @@ class ReportScreen(Screen):
                 continue
             cves_seen.add(cve)
             severity = finding.get("severity", "LOW").upper()
-            remediation = finding.get(
-                "remediation", "Review and patch vulnerable component."
-            )
+            remediation = finding.get("remediation", "Review and patch vulnerable component.")
             recs.append(f"[bold]{severity} -- {cve}[/bold]")
             recs.append(f"  {remediation}")
             recs.append("")

@@ -57,9 +57,7 @@ class FindingsScreen(Screen):
         if self.app.session_store:
             self._session = self.app.session_store.get_active()
         if self._session and self._session.findings:
-            self._selected_index = min(
-                self._selected_index, len(self._session.findings) - 1
-            )
+            self._selected_index = min(self._selected_index, len(self._session.findings) - 1)
 
     def _render_findings_list(self) -> Panel:
         """Render a table of all findings."""
