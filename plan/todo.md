@@ -33,7 +33,7 @@ Each task includes the exact files to modify, acceptance criteria, and test comm
   - Accept: `test_empty_scope_rejects_all` passes
   - Test: `uv run pytest tests/test_safety/test_scope_guard.py -q`
 
-- [ ] **Fix test infrastructure**
+- [x] **Fix test infrastructure**
   - Run: `uv sync --all-extras`
   - File: `tests/test_safety/test_scope_guard.py` — remove unused `import pytest`, fix import order
   - File: `pyproject.toml` — register `integration` mark: `markers = ["integration: integration tests against lab targets"]`

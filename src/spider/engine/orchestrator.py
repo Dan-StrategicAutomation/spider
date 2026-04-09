@@ -40,7 +40,7 @@ class SpiderOrchestrator:
     ) -> None:
         self.config = config
         self.progress_fn = progress_fn or (lambda _s, _d="": None)
-        self.weaver = GraphWeaver(progress_fn=self.progress_fn)
+        self.weaver = GraphWeaver(config=config, progress_fn=self.progress_fn)
         self.scope_guard = scope_guard
         self.hitl_gate = hitl_gate
         self.session_store = session_store
@@ -118,35 +118,52 @@ class SpiderOrchestrator:
             # Filter tools specifically for this node based on weaver topology
             node_tools = [tools[t.name] for t in node.tools if t.name in tools]
 
-            if node_role == NodeRole.REACT:
-                if "recon" in node_id.lower():
-                    node_modules[node_id] = ReconModule(tools=node_tools)
-                elif "enum" in node_id.lower():
-                    node_modules[node_id] = WebEnumerationModule(tools=node_tools)
-                else:
-                    node_modules[node_id] = ReconModule(tools=node_tools)
-            elif node_role == NodeRole.CHAIN_OF_THOUGHT:
-                if "vuln" in node_id.lower():
-                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=node_tools)
-                elif "exploit" in node_id.lower() or "plan" in node_id.lower():
-                    node_modules[node_id] = ExploitPlanningModule(tools=node_tools)
-                elif "report" in node_id.lower():
-                    node_modules[node_id] = ReporterModule(tools=node_tools)
-                else:
-                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=node_tools)
-            else:
-                from spider.nodes.executor import ExecutorModule
-                from spider.nodes.post_exploit import PostExploitationModule
+            # Robust Schema-Based Mapping: Map nodes to modules based on their CANONICAL OUTPUT
+            # This is more stable than node ID heuristics as IDs can be anything the weaver chooses.
+            output_name = node.output.lower()
 
-                if "post" in node_id.lower() or "elevate" in node_id.lower():
-                    node_modules[node_id] = PostExploitationModule(tools=node_tools)
-                elif "exec" in node_id.lower():
-                    node_modules[node_id] = ExecutorModule(
-                        tools=node_tools,
-                        hitl_gate=self.hitl_gate,
-                    )
+            from spider.nodes.enum import ServiceEnumerationModule, WebEnumerationModule
+            from spider.nodes.executor import ExecutorModule
+            from spider.nodes.exploit_planner import ExploitPlanningModule
+            from spider.nodes.post_exploit import PostExploitationModule
+            from spider.nodes.recon import ReconModule
+            from spider.nodes.reporter import ReporterModule
+            from spider.nodes.vuln_analysis import VulnerabilityAnalysisModule
+
+            if "recon_results" in output_name:
+                node_modules[node_id] = ReconModule(tools=node_tools, config=self.config)
+            elif "service_details" in output_name:
+                node_modules[node_id] = ServiceEnumerationModule(tools=node_tools, config=self.config)
+            elif "web_findings" in output_name:
+                node_modules[node_id] = WebEnumerationModule(tools=node_tools, config=self.config)
+            elif "vulnerabilities" in output_name:
+                node_modules[node_id] = VulnerabilityAnalysisModule(
+                    tools=node_tools, config=self.config
+                )
+            elif "attack_plan" in output_name:
+                node_modules[node_id] = ExploitPlanningModule(tools=node_tools, config=self.config)
+            elif "exploit_result" in output_name:
+                node_modules[node_id] = ExecutorModule(
+                    tools=node_tools,
+                    hitl_gate=self.hitl_gate,
+                    config=self.config,
+                )
+            elif "post_exploit_result" in output_name:
+                node_modules[node_id] = PostExploitationModule(
+                    tools=node_tools,
+                    hitl_gate=self.hitl_gate,
+                    config=self.config,
+                )
+            elif "report" in output_name:
+                node_modules[node_id] = ReporterModule(tools=node_tools, config=self.config)
+            else:
+                # Absolute fallback using role or first best guess
+                if node_role == NodeRole.REACT:
+                    node_modules[node_id] = ReconModule(tools=node_tools, config=self.config)
                 else:
-                    node_modules[node_id] = VulnerabilityAnalysisModule(tools=node_tools)
+                    node_modules[node_id] = VulnerabilityAnalysisModule(
+                        tools=node_tools, config=self.config
+                    )
 
         return node_modules
 
@@ -212,8 +229,8 @@ class SpiderOrchestrator:
         self.progress_fn("build_done", "Node modules ready")
 
         # Phase 4: Execute via GraphRunner
-        node_ids = [n.id for n in topology.nodes]
-        self.progress_fn("execute", f"Running pipeline: {' -> '.join(node_ids)}")
+        node_names = [n.name for n in topology.nodes]
+        self.progress_fn("execute", f"Running pipeline: {' -> '.join(node_names)}")
         runner = GraphRunner(
             topology=topology,
             node_modules=node_modules,
@@ -260,6 +277,10 @@ class SpiderOrchestrator:
 
         evaluator = SelfEvaluator()
         current_result = initial_result
+
+        if not self.config.use_refine:
+            self.progress_fn("heal_skip", "Refinement disabled -- skipping healing loop")
+            return current_result
 
         for round_num in range(max_rounds):
             self.progress_fn("heal_eval", f"Quality check round {round_num + 1}/{max_rounds}...")

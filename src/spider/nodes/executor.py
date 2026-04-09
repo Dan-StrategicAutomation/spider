@@ -4,6 +4,8 @@ Requires human approval for each exploit step. Uses ReAct with tools
 for actual exploitation attempts.
 """
 
+from typing import Any
+
 import dspy
 
 from spider.schemas import AttackPlan, ExploitResult
@@ -26,8 +28,16 @@ class ExecutorModule(dspy.Module):
     each tool call before the ReAct agent can execute it.
     """
 
-    def __init__(self, tools: list[dspy.Tool]):
+    def __init__(
+        self,
+        tools: list[dspy.Tool],
+        config: Any | None = None,
+        hitl_gate: Any | None = None,
+        **kwargs,
+    ):
+
         super().__init__()
+        self.config = config
         base = dspy.ReAct(ExecutorSignature, tools=tools, max_iters=10)
 
         def exec_reward(args: dict, pred: dspy.Prediction) -> float:
@@ -41,12 +51,15 @@ class ExecutorModule(dspy.Module):
                 score += 0.2
             return min(1.0, score)
 
-        self.agent = dspy.Refine(
-            module=base,
-            N=3,
-            reward_fn=exec_reward,
-            threshold=0.6,
-        )
+        if self.config and self.config.use_refine:
+            self.agent = dspy.Refine(
+                module=base,
+                N=self.config.max_refine_retries,
+                reward_fn=exec_reward,
+                threshold=0.6,
+            )
+        else:
+            self.agent = base
 
     def forward(self, attack_plan: AttackPlan, target: str) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):

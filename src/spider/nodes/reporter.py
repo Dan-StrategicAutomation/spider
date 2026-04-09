@@ -4,6 +4,8 @@ Synthesizes all findings into a structured report with executive summary,
 technical details, attack chains, and remediation guidance.
 """
 
+from typing import Any
+
 import dspy
 
 from spider.schemas import AttackPlan, PentestReport, ReconResults, VulnerabilityList
@@ -26,33 +28,11 @@ class ReporterSignature(dspy.Signature):
 class ReporterModule(dspy.Module):
     """Report generation module."""
 
-    def __init__(self):
+    def __init__(self, tools: list[dspy.Tool] | None = None, config: Any | None = None, **kwargs):
         super().__init__()
-        generator = dspy.ChainOfThought(ReporterSignature)
-
-        def report_reward(args: dict, pred: dspy.Prediction) -> float:
-            rpt = pred.report
-            score = 0.0
-            if rpt.executive_summary.summary_text:
-                score += 0.2
-            if rpt.findings:
-                score += 0.3
-            if rpt.attack_chains:
-                score += 0.2
-            if rpt.remediation:
-                score += 0.1
-            if rpt.methodology:
-                score += 0.1
-            if rpt.timeline:
-                score += 0.1
-            return min(1.0, score)
-
-        self.generator = dspy.Refine(
-            module=generator,
-            N=3,
-            reward_fn=report_reward,
-            threshold=0.8,
-        )
+        self.config = config
+        # Optimized: Predict is significantly more token-efficient for large analytical outputs
+        self.generator = dspy.Predict(ReporterSignature)
 
     def forward(
         self,
@@ -66,3 +46,4 @@ class ReporterModule(dspy.Module):
                 vulnerabilities=vulnerabilities,
                 attack_plan=attack_plan,
             )
+

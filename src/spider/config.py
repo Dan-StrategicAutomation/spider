@@ -96,6 +96,10 @@ class SpiderConfig(BaseSettings):
     )
 
     # DSPy Configuration
+    use_refine: bool = Field(
+        default=True,
+        description="Enable/Disable dspy.Refine loops for self-improvement",
+    )
     max_refine_retries: int = Field(
         default=3,
         description="Maximum Refine retry attempts per node",

@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Any
 
 import validators
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ScanPhase(StrEnum):
@@ -54,6 +54,14 @@ class ReconResults(BaseModel):
     tech_stack: list[TechInfo] = Field(default_factory=list)
     raw_output: str = ""
 
+    @field_validator("raw_output", mode="before")
+    @classmethod
+    def truncate_raw(cls, v: Any) -> str:
+        if isinstance(v, str) and len(v) > 10000:
+            return f"{v[:10000]}... [TRUNCATED]"
+        return str(v)
+
+
 
 # ── Enumeration Schemas ──────────────────────────────────────────────────────
 
@@ -81,6 +89,14 @@ class WebFindings(BaseModel):
     potential_vulns: list[str] = Field(default_factory=list)
     raw_output: str = ""
 
+    @field_validator("raw_output", mode="before")
+    @classmethod
+    def truncate_raw(cls, v: Any) -> str:
+        if isinstance(v, str) and len(v) > 10000:
+            return f"{v[:10000]}... [TRUNCATED]"
+        return str(v)
+
+
 
 class ServiceDetails(BaseModel):
     service_name: str = ""
@@ -90,6 +106,14 @@ class ServiceDetails(BaseModel):
     default_credentials_possible: bool = False
     known_weaknesses: list[str] = Field(default_factory=list)
     raw_output: str = ""
+
+    @field_validator("raw_output", mode="before")
+    @classmethod
+    def truncate_raw(cls, v: Any) -> str:
+        if isinstance(v, str) and len(v) > 10000:
+            return f"{v[:10000]}... [TRUNCATED]"
+        return str(v)
+
 
 
 # ── Vulnerability Schemas ────────────────────────────────────────────────────
@@ -144,6 +168,14 @@ class VulnerabilityList(BaseModel):
     total_high: int = 0
     raw_output: str = ""
 
+    @field_validator("raw_output", mode="before")
+    @classmethod
+    def truncate_raw(cls, v: Any) -> str:
+        if isinstance(v, str) and len(v) > 10000:
+            return f"{v[:10000]}... [TRUNCATED]"
+        return str(v)
+
+
 
 # ── Exploit Planning Schemas ─────────────────────────────────────────────────
 
@@ -181,6 +213,14 @@ class AttackPlan(BaseModel):
     hitl_required_count: int = 0
     total_steps: int = 0
     raw_output: str = ""
+
+    @field_validator("raw_output", mode="before")
+    @classmethod
+    def truncate_raw(cls, v: Any) -> str:
+        if isinstance(v, str) and len(v) > 10000:
+            return f"{v[:10000]}... [TRUNCATED]"
+        return str(v)
+
 
 
 # ── Exploitation Schemas ─────────────────────────────────────────────────────
@@ -239,6 +279,14 @@ class PentestReport(BaseModel):
     timeline: str = ""
     raw_output: str = ""
 
+    @field_validator("raw_output", mode="before")
+    @classmethod
+    def truncate_raw(cls, v: Any) -> str:
+        if isinstance(v, str) and len(v) > 10000:
+            return f"{v[:10000]}... [TRUNCATED]"
+        return str(v)
+
+
 
 # ── Topology Schemas (Graph Definition) ──────────────────────────────────────
 
@@ -279,20 +327,49 @@ class GraphTopology(BaseModel):
     nodes: list[NodeDef]
     edges: list[EdgeDef]
     runtime_inputs: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def sync_edges_and_dependencies(self) -> "GraphTopology":
+        """Ensure edges reflect the depends_on list of nodes."""
+        id_set = {n.id for n in self.nodes}
+        current_edges = {(e.source, e.target) for e in self.edges}
+
+        for node in self.nodes:
+            for dep in node.depends_on:
+                if dep not in id_set:
+                    # Ignore external runtime inputs (like 'target')
+                    if dep in self.runtime_inputs:
+                        continue
+                    # Note: We don't raise error here, we let topological_waves check DAG
+                    continue
+                if (dep, node.id) not in current_edges:
+                    self.edges.append(EdgeDef(source=dep, target=node.id, label="data_flow"))
+
+        return self
 
     def topological_waves(self) -> list[list[str]]:
         """Returns waves of node IDs for parallel execution.
 
-        Raises ValueError if the graph contains a cycle."""
+        Calculates waves based on dependencies. Nodes with 0 satisfied
+        dependencies run in the first wave.
+        """
         id_set = {n.id for n in self.nodes}
+        # Build adjacency and in-degree strictly from NodeDef.depends_on
+        # to ensure the data flow defined in nodes is respected.
         in_degree: dict[str, int] = {n.id: 0 for n in self.nodes}
         adj: dict[str, list[str]] = {n.id: [] for n in self.nodes}
-        for e in self.edges:
-            if e.source in id_set and e.target in id_set:
-                in_degree[e.target] += 1
-                adj[e.source].append(e.target)
+
+        for node in self.nodes:
+            for dep in node.depends_on:
+                # Only internal dependencies count for wave calc
+                if dep in id_set:
+                    in_degree[node.id] += 1
+                    adj[dep].append(node.id)
+
         waves: list[list[str]] = []
         queue = sorted([k for k, d in in_degree.items() if d == 0])
+
         while queue:
             waves.append(list(queue))
             next_q = []
@@ -302,9 +379,10 @@ class GraphTopology(BaseModel):
                     if in_degree[nb] == 0:
                         next_q.append(nb)
             queue = sorted(next_q)
+
         total_in_waves = len(set().union(*(set(w) for w in waves))) if waves else 0
         if total_in_waves != len(id_set):
-            raise ValueError("Cycle detected in topology -- graph must be a DAG")
+            raise ValueError(f"Cycle detected in topology. {len(id_set)-total_in_waves} orphans.")
         return waves
 
 

@@ -4,6 +4,8 @@ Two parallel modules: WebEnumeration and ServiceEnumeration.
 Both wrapped with dspy.Refine for quality improvement.
 """
 
+from typing import Any
+
 import dspy
 
 from spider.schemas import ReconResults, ServiceDetails, WebFindings
@@ -30,62 +32,46 @@ class SvcEnumSignature(dspy.Signature):
 
 
 class WebEnumerationModule(dspy.Module):
-    """Web enumeration module with dspy.Refine."""
+    """Web enumeration module."""
 
-    def __init__(self, tools: list[dspy.Tool]):
+    def __init__(self, tools: list[dspy.Tool], config: Any | None = None, **kwargs):
         super().__init__()
-        analyzer = dspy.ChainOfThought(WebEnumSignature)
+        self.config = config
+        base_react = dspy.ReAct(WebEnumSignature, tools=tools)
 
-        def web_enum_reward(args: dict, pred: dspy.Prediction) -> float:
-            findings = pred.web_findings
-            score = 0.0
-            if findings.directories:
-                score += 0.3
-            if findings.params:
-                score += 0.2
-            if findings.technologies:
-                score += 0.3
-            if findings.potential_vulns:
-                score += 0.2
-            return min(1.0, score)
+        if config and config.use_refine:
+            self.analyzer = dspy.Refine(
+                module=base_react,
+                N=config.max_refine_retries,
+                reward_fn=lambda _a, _p: float(len(_p.web_findings.directories) > 0),
+                threshold=config.refine_threshold,
+            )
+        else:
+            self.analyzer = base_react
 
-        self.analyzer = dspy.Refine(
-            module=analyzer,
-            N=3,
-            reward_fn=web_enum_reward,
-            threshold=0.7,
-        )
-
-    def forward(self, recon_results: str) -> dspy.Prediction:
+    def forward(self, recon_results: ReconResults) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):
             return self.analyzer(recon_results=recon_results)
 
 
 class ServiceEnumerationModule(dspy.Module):
-    """Service enumeration module with dspy.Refine."""
+    """Service enumeration module."""
 
-    def __init__(self, tools: list[dspy.Tool]):
+    def __init__(self, tools: list[dspy.Tool], config: Any | None = None, **kwargs):
         super().__init__()
-        analyzer = dspy.ChainOfThought(SvcEnumSignature)
+        self.config = config
+        base_react = dspy.ReAct(SvcEnumSignature, tools=tools)
 
-        def svc_enum_reward(args: dict, pred: dspy.Prediction) -> float:
-            details = pred.service_details
-            score = 0.0
-            if details.service_name:
-                score += 0.3
-            if details.version:
-                score += 0.3
-            if details.known_weaknesses:
-                score += 0.4
-            return min(1.0, score)
+        if config and config.use_refine:
+            self.analyzer = dspy.Refine(
+                module=base_react,
+                N=config.max_refine_retries,
+                reward_fn=lambda _a, _p: float(len(_p.service_details.service_name) > 0),
+                threshold=config.refine_threshold,
+            )
+        else:
+            self.analyzer = base_react
 
-        self.analyzer = dspy.Refine(
-            module=analyzer,
-            N=3,
-            reward_fn=svc_enum_reward,
-            threshold=0.7,
-        )
-
-    def forward(self, recon_results: str) -> dspy.Prediction:
+    def forward(self, recon_results: ReconResults) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):
             return self.analyzer(recon_results=recon_results)

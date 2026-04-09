@@ -4,6 +4,8 @@ Discovers all hosts, ports, services, and technologies on the target.
 Wrapped with dspy.Refine for self-improving reconnaissance quality.
 """
 
+from typing import Any
+
 import dspy
 
 from spider.schemas import ReconResults
@@ -31,8 +33,9 @@ class ReconModule(dspy.Module):
     subdomain_enum) and synthesizing results into a ReconResults object.
     """
 
-    def __init__(self, tools: list[dspy.Tool]):
+    def __init__(self, tools: list[dspy.Tool], config: Any | None = None, **kwargs):
         super().__init__()
+        self.config = config
         base = dspy.ReAct(ReconSignature, tools=tools, max_iters=15)
 
         def recon_reward(args: dict, pred: dspy.Prediction) -> float:
@@ -49,12 +52,15 @@ class ReconModule(dspy.Module):
                 score += 0.2
             return min(1.0, score)
 
-        self.agent = dspy.Refine(
-            module=base,
-            N=3,
-            reward_fn=recon_reward,
-            threshold=0.7,
-        )
+        if self.config and self.config.use_refine:
+            self.agent = dspy.Refine(
+                module=base,
+                N=self.config.max_refine_retries,
+                reward_fn=recon_reward,
+                threshold=0.7,
+            )
+        else:
+            self.agent = base
 
     def forward(self, **kwargs):
         target = kwargs.get("target", "")

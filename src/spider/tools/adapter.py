@@ -12,6 +12,22 @@ import subprocess
 import dspy
 
 
+def _sanitize_args(kwargs: dict) -> dict:
+    """Robustly unwrap common LLM hallucinations in tool arguments.
+
+    Local models often pass {"target": {"target": "127.0.0.1"}} instead of
+    {"target": "127.0.0.1"}. This helper flattens such structures.
+    """
+    sanitized = {}
+    for k, v in kwargs.items():
+        if isinstance(v, dict) and k in v:
+            # Unwrap nested dict: {"target": {"target": "..."}} -> "..."
+            sanitized[k] = v[k]
+        else:
+            sanitized[k] = v
+    return sanitized
+
+
 def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300, required_binary=None):
     """Wrap a tool function with scope checking, audit logging, and timeout.
 
@@ -23,6 +39,9 @@ def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300, require
 
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
+        # 0. Sanitize arguments (unwrap LLM hallucinations)
+        kwargs = _sanitize_args(kwargs)
+
         # 1. Scope check
         # Look for target, domain, or host in kwargs or as first positional argument
         candidate_target = kwargs.get("target") or kwargs.get("domain") or kwargs.get("host")
@@ -92,6 +111,9 @@ def make_tool_from_cmd(
         return None
 
     def run(**kwargs) -> str:
+        # 0. Sanitize arguments (unwrap LLM hallucinations)
+        kwargs = _sanitize_args(kwargs)
+
         # 1. Look for target, domain, or host in kwargs for scope validation
         candidate_target = kwargs.get("target") or kwargs.get("domain") or kwargs.get("host")
 

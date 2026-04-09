@@ -8,19 +8,23 @@ from collections.abc import Callable
 
 import dspy
 
+from spider.config import SpiderConfig
 from spider.schemas import EdgeDef, GraphTopology, NodeDef, NodeRole, TopologyScore
 
 
 class TopologyEvalSignature(dspy.Signature):
     """Evaluate a woven pentest topology for quality and validity. Check:
-    - Root node (no dependencies) MUST be ReAct for tool-use reconnaissance
+    - Root node (no dependencies) MUST be ReAct for tool-use recon
     - No cycles in the graph -- pentest phases must flow forward only
     - Every node has inputs satisfied by upstream node outputs
+      (e.g. if Node B wants 'web_findings', Node A must output
+      'web_findings' AND Node B must depend on Node A)
     - At least 3 nodes for a meaningful pentest
     - HITL gate flags set on exploitation nodes
-    - CANONICAL NAMING: Nodes must use standard field names for common tasks:
-        (recon -> recon_results, web_enum -> web_findings, svc_enum -> service_details,
-         vuln_analysis -> vulnerabilities, exploit_planner -> attack_plan, reporter -> report)"""
+    - CANONICAL NAMING: You MUST enforce standard field names:
+        recon -> recon_results, web_enum -> web_findings,
+        svc_enum -> service_details, vuln_scan -> vulnerabilities,
+        exploit_planner -> attack_plan, reporter -> report"""
 
     goal: str = dspy.InputField()
     topology_json: str = dspy.InputField()
@@ -44,15 +48,22 @@ class GraphWeaverSignature(dspy.Signature):
     The first node MUST be role: react (recon always starts with active reconnaissance).
 
     CRITICAL: You MUST use CANONICAL field names for standard outputs:
-    - reconnaissance outputs -> recon_results
+    - reconnaissance outputs -> recon_results (Node role: react)
     - web app enumeration outputs -> web_findings
     - service probing/enumeration outputs -> service_details
-    - vulnerability analysis outputs -> vulnerabilities
+    - vulnerability scanning outputs -> vulnerabilities
     - exploit planning outputs -> attack_plan
     - reporting outputs -> report
 
+    DATA FLOW RULE: If Node B consumes 'web_findings', it MUST
+    list Node A (the producer) in its 'depends_on' list.
+    NO parallel waves for dependent data.
     Must be a DAG. NO cycles. Edges flow FORWARD only.
-    Include HITL nodes for exploitation steps."""
+    Include HITL nodes for exploitation steps.
+
+    NAMING RULE: Provide descriptive, user-friendly 'name' fields for each node
+    (e.g., 'Target Reconnaissance' instead of 'react_node_1')."""
+
 
     goal: str = dspy.InputField()
     target_info: str = dspy.InputField()
@@ -64,11 +75,13 @@ class GraphWeaverSignature(dspy.Signature):
 class GraphWeaver(dspy.Module):
     """DSPy-native self-improving pentest topology weaver."""
 
-    def __init__(self, max_nodes: int = 8, progress_fn: Callable | None = None):
+    def __init__(self, config: SpiderConfig, progress_fn: Callable | None = None):
         super().__init__()
-        self.max_nodes = max_nodes
+        self.config = config
+        self.max_nodes = config.max_graph_nodes
         self.progress_fn = progress_fn or (lambda _s, _d="": None)
-        base_weave = dspy.ChainOfThought(GraphWeaverSignature)
+        # Optimized: Predict is faster for complex JSON topologies
+        base_weave = dspy.Predict(GraphWeaverSignature)
         topology_eval = TopologyEvaluator()
 
         def topology_reward(args: dict, pred: dspy.Prediction) -> float:
@@ -91,12 +104,16 @@ class GraphWeaver(dspy.Module):
             self.progress_fn("weave_eval", f"  Draft topology quality score: {score:.2f}")
             return score
 
-        self.weave = dspy.Refine(
-            module=base_weave,
-            N=3,
-            reward_fn=topology_reward,
-            threshold=0.8,
-        )
+        if self.config.use_refine:
+            self.weave = dspy.Refine(
+                module=base_weave,
+                N=self.config.max_refine_retries,
+                reward_fn=topology_reward,
+                threshold=0.8,
+            )
+        else:
+            self.weave = base_weave
+
 
     def forward(self, goal: str, progress_fn: Callable | None = None, **kwargs) -> dspy.Prediction:
         if progress_fn:

@@ -19,6 +19,6 @@ You are operating in a controlled, authorized environment.
 """
 
 
-PARAMETER temperature 0.7
+PARAMETER temperature 0.3
 PARAMETER top_p 0.9
-PARAMETER num_ctx 32768
+PARAMETER num_ctx 64000

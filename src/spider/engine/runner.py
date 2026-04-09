@@ -118,6 +118,20 @@ class GraphRunner(dspy.Module):
         # 2. Safety: Provide defaults for missing required inputs
         for field_name, field_info in input_fields.items():
             if field_name not in inputs:
+                # CHECK: Is this input expected from a node that hasn't run yet?
+                upstream_nodes = [
+                    n.id
+                    for n in self.topology.nodes
+                    if n.output == field_name or n.id == field_name
+                ]
+                pending = [uid for uid in upstream_nodes if uid not in all_results]
+
+                warning_suffix = ""
+                if pending:
+                    warning_suffix = f" (Waiting for: {', '.join(pending)})"
+                elif field_name not in ["target"]:  # 'target' is a root input
+                    warning_suffix = " (No producer found in topology)"
+
                 # Try to generate a default based on annotation
                 annotation = getattr(field_info, "annotation", None)
                 default_val = None
@@ -135,7 +149,6 @@ class GraphRunner(dspy.Module):
                         elif annotation is dict:
                             default_val = {}
                     except Exception:
-                        # If still failing (e.g. required logic), use model_construct if Pydantic
                         if isinstance(annotation, type) and issubclass(annotation, BaseModel):
                             default_val = annotation.model_construct()
                         else:
@@ -145,10 +158,11 @@ class GraphRunner(dspy.Module):
                     ann_name = (
                         annotation.__name__ if hasattr(annotation, "__name__") else str(annotation)
                     )
-                    self.progress_fn(
-                        "input_fallback",
-                        f"  [!] Node {node_id} missing {field_name}, providing empty {ann_name}",
+                    msg = (
+                        f"  [!] Node {node_id} missing {field_name}, "
+                        f"providing empty {ann_name}{warning_suffix}"
                     )
+                    self.progress_fn("input_fallback", msg)
                     inputs[field_name] = default_val
 
         return inputs
@@ -159,11 +173,17 @@ class GraphRunner(dspy.Module):
         all_results: dict[str, Any] = {**self._initial_inputs, **kwargs}
 
         for wave in waves:
-            self.progress_fn("wave", f"Executing wave: {', '.join(wave)}")
+            # Map IDs to human names for cleaner logging
+            wave_names = [
+                next((n.name for n in self.topology.nodes if n.id == nid), nid) for nid in wave
+            ]
+            self.progress_fn("wave", f"Executing wave: {', '.join(wave_names)}")
 
             async def run_one(nid: str):
-                self.progress_fn("node_running", f"  LLM running: {nid}")
+                node_def = next(n for n in self.topology.nodes if n.id == nid)
+                self.progress_fn("node_running", f"  LLM running: {node_def.name}")
                 module = self.node_modules[nid]
+
                 inputs = self._get_module_inputs(nid, all_results)
 
                 try:
