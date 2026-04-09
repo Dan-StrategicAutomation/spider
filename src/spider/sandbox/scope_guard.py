@@ -49,19 +49,26 @@ class ScopeGuard:
             except ValueError:
                 pass
 
-        # 3. Check allowed networks
+        # 3. If allowed list is empty, treat as optional/unrestricted
+        if not self._allowed_networks:
+            return True, "Unrestricted scope (allowed_targets list is empty)"
+
+        # 4. Check allowed networks
         for allowed in self._allowed_networks:
             if isinstance(allowed, str):
                 if fnmatch.fnmatch(target, allowed):
                     return True, f"Matching allowed pattern {allowed!r}"
             else:
                 try:
-                    if ipaddress.IPv4Address(target) in allowed:
+                    # Try as IP address first
+                    target_ip = ipaddress.IPv4Address(target)
+                    if target_ip in allowed:
                         return True, f"Within allowed network {allowed!r}"
                 except ValueError:
-                    # Hostname -- check domain match
-                    if fnmatch.fnmatch(target, str(allowed)):
-                        return True, f"Matching allowed hostname {allowed!r}"
+                    # Target is a hostname (like 'localhost' or 'target.com')
+                    # If the 'allowed' entry was also a hostname (handled in __init__),
+                    # literal match or fnmatch already covered it above.
+                    pass
 
         return False, f"Target {target!r} is not within any allowed scope"
 

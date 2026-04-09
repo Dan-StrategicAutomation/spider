@@ -5,6 +5,7 @@ Topology schemas (NodeDef, GraphTopology) also live here for centralization.
 """
 
 from enum import StrEnum
+from typing import Any
 
 import validators
 from pydantic import BaseModel, Field, field_validator
@@ -300,12 +301,43 @@ class QualityScore(BaseModel):
     issues: list[str] = Field(default_factory=list)
     improvements: list[str] = Field(default_factory=list)
 
+    @field_validator("score", mode="before")
+    @classmethod
+    def validate_score(cls, v: Any) -> float:
+        if isinstance(v, dict) and "score" in v:
+            return float(v["score"])
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return 0.0
+
+    @classmethod
+    def wrap(cls, v: Any) -> "QualityScore":
+        """Wrap a raw score into a QualityScore model if needed."""
+        if isinstance(v, cls):
+            return v
+        if isinstance(v, float | int):
+            return cls(score=float(v), reasoning="Converted from raw score")
+        if isinstance(v, dict):
+            return cls.model_validate(v)
+        return cls(score=0.0, reasoning=f"Failed to parse: {v}")
+
 
 class TopologyScore(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
     is_valid_dag: bool = True
     has_react_root: bool = True
     reasoning: str = ""
+
+    @field_validator("score", mode="before")
+    @classmethod
+    def validate_topo_score(cls, v: Any) -> float:
+        if isinstance(v, dict) and "score" in v:
+            return float(v["score"])
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return 0.0
 
 
 class AdaptationResult(BaseModel):
@@ -330,9 +362,13 @@ def validate_target_syntax(target: str) -> bool:
     """Check if a target is a valid IPv4/IPv6 address or a domain name.
 
     Uses the validators library for robust, non-custom validation.
+    Allows 'localhost' explicitly.
     """
     if not target:
         return False
+
+    if target.lower() == "localhost":
+        return True
 
     # Check IP (v4 or v6)
     if validators.ip_address.ipv4(target) or validators.ip_address.ipv6(target):

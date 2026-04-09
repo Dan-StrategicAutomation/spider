@@ -17,10 +17,13 @@ def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300):
     Returns a dspy.Tool that can be passed to dspy.ReAct.
     """
     @functools.wraps(func)
-    def wrapped(**kwargs):
+    def wrapped(*args, **kwargs):
         # 1. Scope check
-        if scope_guard and "target" in kwargs:
-            authorized, reason = scope_guard.authorize(kwargs["target"], func.__name__)
+        # Look for target, domain, or host in kwargs for scope validation
+        candidate_target = kwargs.get("target") or kwargs.get("domain") or kwargs.get("host")
+        
+        if scope_guard and candidate_target:
+            authorized, reason = scope_guard.authorize(candidate_target, func.__name__)
             if not authorized:
                 return json.dumps({
                     "error": f"OUT_OF_SCOPE: {reason}",
@@ -38,8 +41,10 @@ def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300):
             )
 
         # 3. Execute with timeout
+        # We pass all kwargs directly. Resilience is handled by the tool 
+        # definition having **kwargs.
         try:
-            result = func(**kwargs)
+            result = func(*args, **kwargs)
             phase = "completed"
         except subprocess.TimeoutExpired:
             result = json.dumps({"error": "TIMEOUT", "limit": timeout})
@@ -75,17 +80,26 @@ def make_tool_from_cmd(
     The command list uses {placeholder} syntax for parameter substitution.
     """
     def run(**kwargs) -> str:
-        # Build command
-        cmd = [part.format(**kwargs) for part in command]
+        # 1. Look for target, domain, or host in kwargs for scope validation
+        candidate_target = kwargs.get("target") or kwargs.get("domain") or kwargs.get("host")
 
-        if scope_guard and "target" in kwargs:
-            authorized, reason = scope_guard.authorize(kwargs["target"], name)
+        if scope_guard and candidate_target:
+            authorized, reason = scope_guard.authorize(candidate_target, name)
             if not authorized:
                 return json.dumps({"error": f"OUT_OF_SCOPE: {reason}", "tool": name})
 
+        # 2. Audit log start
         if audit_logger:
             audit_logger.log(action=name, target=kwargs.get("target", ""), phase="started")
 
+        # 3. Build command (only uses parameters found in the command template)
+        try:
+            cmd = [part.format(**kwargs) for part in command]
+        except KeyError as e:
+            # If the LLM missed a required parameter that the command template needs
+            return json.dumps({"error": f"MISSING_PARAMETER: {str(e)}", "tool": name})
+
+        # 4. Execution
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=timeout
@@ -104,6 +118,7 @@ def make_tool_from_cmd(
             output = json.dumps({"error": str(e)})
             phase = "error"
 
+        # 5. Audit log completion
         if audit_logger:
             audit_logger.log(
                 action=name,
@@ -114,8 +129,10 @@ def make_tool_from_cmd(
 
         return output
 
-    # Attach docstring for DSPy tool inspection
+    # Attach docstring and name for DSPy tool inspection
     run.__doc__ = docstring
     run.__name__ = name
 
+    # For command-based tools, we just use **kwargs directly in the signature
+    # as they are dynamic by nature.
     return dspy.Tool(run)
