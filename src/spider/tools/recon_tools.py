@@ -118,21 +118,34 @@ def register_all(scope_guard=None, audit_logger=None):
     from spider.tools.adapter import make_tool
 
     return {
-        "nmap_scan": make_tool(nmap_scan, scope_guard=scope_guard, audit_logger=audit_logger),
-        "masscan_scan": make_tool(masscan_scan, scope_guard=scope_guard, audit_logger=audit_logger),
+        "nmap_scan": make_tool(
+            nmap_scan,
+            scope_guard=scope_guard,
+            audit_logger=audit_logger,
+            required_binary="nmap",
+        ),
+        "masscan_scan": make_tool(
+            masscan_scan,
+            scope_guard=scope_guard,
+            audit_logger=audit_logger,
+            required_binary="masscan",
+        ),
         "whois_lookup": make_tool(
             whois_lookup,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="whois",
         ),
         "dns_enum": make_tool(
             dns_enum,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="dig",
         ),
         "subdomain_enum": make_tool(
             subdomain_enum,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="dig",
         ),
     }

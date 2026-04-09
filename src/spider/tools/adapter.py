@@ -6,16 +6,20 @@ This ensures no tool can run out-of-scope or without being logged.
 
 import functools
 import json
+import shutil
 import subprocess
 
 import dspy
 
 
-def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300):
+def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300, required_binary=None):
     """Wrap a tool function with scope checking, audit logging, and timeout.
 
-    Returns a dspy.Tool that can be passed to dspy.ReAct.
+    Returns a dspy.Tool that can be passed to dspy.ReAct, or None if a
+    required binary is missing.
     """
+    if required_binary and shutil.which(required_binary) is None:
+        return None
 
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
@@ -75,14 +79,17 @@ def make_tool_from_cmd(
     name: str,
     command: list[str],
     docstring: str,
-    scope_guard=None,
     audit_logger=None,
     timeout: int = 300,
-) -> dspy.Tool:
+    required_binary: str | None = None,
+) -> dspy.Tool | None:
     """Create a dspy.Tool from a CLI command template.
 
     The command list uses {placeholder} syntax for parameter substitution.
+    Returns None if a required binary is missing.
     """
+    if required_binary and shutil.which(required_binary) is None:
+        return None
 
     def run(**kwargs) -> str:
         # 1. Look for target, domain, or host in kwargs for scope validation

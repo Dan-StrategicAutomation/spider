@@ -102,20 +102,24 @@ def register_all(scope_guard=None, audit_logger=None):
             gobuster_scan,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="gobuster",
         ),
         "ffuf_scan": make_tool(
             ffuf_scan,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="ffuf",
         ),
         "nikto_scan": make_tool(
             nikto_scan,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="nikto",
         ),
         "enum4linux": make_tool(
             enum4linux,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="enum4linux",
         ),
     }

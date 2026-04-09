@@ -113,7 +113,6 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
 
     divider("INITIALIZATION")
     info("Config loaded from .env / environment")
-    info(f"Models available: {len(config.available_tools)} tools registered")
 
     # Pre-flight environment check
     from spider.tools.diagnostics import check_environment
@@ -168,7 +167,7 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
         progress_fn=cli_progress,
     )
 
-    success("SPIDER initialized successfully")
+    success(f"SPIDER initialized successfully with {len(orchestrator.tools)} tools")
     return config, orchestrator
 
 

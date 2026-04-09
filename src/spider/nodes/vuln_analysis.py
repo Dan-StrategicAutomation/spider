@@ -12,6 +12,9 @@ from spider.schemas import ServiceDetails, VulnerabilityList, WebFindings
 class VulnAnalysisSignature(dspy.Signature):
     """Analyze services and web findings for vulnerabilities.
 
+    GROUNDING RULE: Only report vulnerabilities backed by tool output or intelligence data.
+    If no vulnerabilities are found, return an empty list. NEVER fabricate CVEs or exploit data.
+
     CRITICAL: Your final answer MUST be valid JSON matching the VulnerabilityList schema.
     No conversational text. No preambles. Just the data."""
 

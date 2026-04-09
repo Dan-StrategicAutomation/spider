@@ -47,6 +47,14 @@ class SpiderOrchestrator:
         self.audit_logger = audit_logger
         self._all_tools: dict[str, dspy.Tool] = {}
 
+    @property
+    def tools(self) -> dict[str, dspy.Tool]:
+        """Lazy-load and return all registered tools."""
+        return self._build_tools(
+            scope_guard=self.scope_guard,
+            audit_logger=self.audit_logger,
+        )
+
     def _build_tools(
         self,
         scope_guard: ScopeGuard | None = None,
@@ -57,7 +65,9 @@ class SpiderOrchestrator:
             return self._all_tools
 
         from spider.tools.attack_chain import register_all as chain_reg
+        from spider.tools.cve_intelligence import register_all as cve_reg
         from spider.tools.enum_tools import register_all as enum_reg
+        from spider.tools.exploit_matcher import register_all as match_reg
         from spider.tools.exploitation import register_all as exploit_reg
         from spider.tools.payload_gen import register_all as payload_reg
         from spider.tools.post_exploit_tools import register_all as post_reg
@@ -72,10 +82,15 @@ class SpiderOrchestrator:
         self._all_tools.update(recon_reg(**kw))
         self._all_tools.update(enum_reg(**kw))
         self._all_tools.update(vuln_reg(**kw))
+        self._all_tools.update(cve_reg(**kw))
+        self._all_tools.update(match_reg(**kw))
         self._all_tools.update(exploit_reg(**kw, hitl_gate=self.hitl_gate))
         self._all_tools.update(post_reg(**kw, hitl_gate=self.hitl_gate))
         self._all_tools.update(payload_reg(**kw))
         self._all_tools.update(chain_reg(**kw))
+
+        # Filter out unavailable tools (None values from make_tool)
+        self._all_tools = {k: v for k, v in self._all_tools.items() if v is not None}
 
         return self._all_tools
 

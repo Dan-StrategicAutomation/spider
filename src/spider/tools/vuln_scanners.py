@@ -182,15 +182,18 @@ def register_all(scope_guard=None, audit_logger=None):
             nuclei_scan,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="nuclei",
         ),
         "nmap_nse": make_tool(
             nmap_nse,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="nmap",
         ),
         "trivy_scan": make_tool(
             trivy_scan,
             scope_guard=scope_guard,
             audit_logger=audit_logger,
+            required_binary="trivy",
         ),
     }

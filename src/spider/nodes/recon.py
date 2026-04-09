@@ -12,6 +12,10 @@ from spider.schemas import ReconResults
 class ReconSignature(dspy.Signature):
     """Perform comprehensive reconnaissance on the target.
 
+    GROUNDING RULE: Base ALL findings strictly on tool output.
+    If a tool returns an error or no data, report empty findings for that category.
+    NEVER fabricate hosts, ports, services, or technologies.
+
     CRITICAL: Your final answer MUST be valid JSON matching the ReconResults schema.
     No conversational text. No preambles. Just the data."""
 
