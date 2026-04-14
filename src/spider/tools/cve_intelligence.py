@@ -54,10 +54,10 @@ def _fetch_nvd(cpe: str, service: str, version: str) -> list[dict[str, Any]]:
                 cves.append(
                     {
                         "cve_id": cve_id,
-                        "summary": desc,
-                        "cvss": cvss,
+                        "summary": desc[:300] + "..." if len(desc) > 300 else desc,
+                        "cvss_score": cvss,
                         "severity": severity,
-                        "references": refs[:5],
+                        "references": refs[:2],
                     }
                 )
             return cves
@@ -118,11 +118,13 @@ def cve_intelligence(
     service: str,
     version: str,
     cpe: str = "",
+    limit: int = 10,
 ) -> str:
     """Look up known CVEs for a service/version across NVD, CISA KEV, and EPSS.
 
     Returns a JSON string of prioritized vulnerability findings with exploit
-    availability indicators and severity scores.
+    availability indicators and severity scores. Result set is limited to 'limit'
+    items to fit within context windows.
     """
     cves = _fetch_nvd(cpe, service, version)
     if not cves:
@@ -147,15 +149,20 @@ def cve_intelligence(
         cve_id = cve["cve_id"]
         kev = kev_data.get(cve_id, {})
         cve["in_kev"] = kev.get("in_kev", False)
-        cve["epss"] = epss_data.get(cve_id, 0.0)
+        cve["epss_score"] = epss_data.get(cve_id, 0.0)
 
-    cves.sort(key=lambda c: (c["in_kev"], c["cvss"], c["epss"]), reverse=True)
+    # Prioritize: KEV > CVSS > EPSS
+    cves.sort(key=lambda c: (c["in_kev"], c["cvss_score"], c["epss_score"]), reverse=True)
+
+    total_found = len(cves)
+    cves = cves[:limit]
 
     return json.dumps(
         {
             "success": True,
             "cves": cves,
-            "total": len(cves),
+            "total": total_found,
+            "limit": limit,
         }
     )
 

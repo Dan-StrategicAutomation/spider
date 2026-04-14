@@ -165,7 +165,28 @@ class SpiderOrchestrator:
                         tools=node_tools, config=self.config
                     )
 
+            # Auto-load compiled weights if available
+            self._load_compiled_module(node_modules[node_id])
+
         return node_modules
+
+    def _load_compiled_module(self, module: dspy.Module) -> None:
+        """Attempt to load BootstrapFewShot optimized weights for a module."""
+        module_name = module.__class__.__name__
+        compiled_dir = os.path.join(os.path.dirname(__file__), "..", "compiled")
+        weights_path = os.path.join(compiled_dir, f"{module_name}.json")
+
+        if os.path.exists(weights_path):
+            try:
+                module.load(weights_path)
+                self.progress_fn(
+                    "optimize_load", f"Loaded compiled weights for {module_name}"
+                )
+            except Exception as e:
+                self.progress_fn(
+                    "optimize_error",
+                    f"Failed to load weights for {module_name}: {str(e)}",
+                )
 
     def run(
         self,

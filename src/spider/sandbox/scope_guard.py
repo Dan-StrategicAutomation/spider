@@ -50,9 +50,9 @@ class ScopeGuard:
             except ValueError:
                 pass
 
-        # 3. If allowed list is empty, treat as optional/unrestricted
+        # 3. If allowed list is empty, reject all targets (fail-safe)
         if not self._allowed_networks:
-            return True, "Unrestricted scope (allowed_targets list is empty)"
+            return False, "No allowed targets specified - access denied"
 
         # 4. Check allowed networks
         for allowed in self._allowed_networks:
