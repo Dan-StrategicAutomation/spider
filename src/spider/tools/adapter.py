@@ -16,13 +16,39 @@ import dspy
 from spider.sandbox.hitl_gate import HITLGate
 
 
+def _audit_log(
+    audit_logger: Any | None,
+    *,
+    action: str,
+    target: str,
+    phase: str,
+    params: dict[str, Any] | None = None,
+    result: str = "",
+) -> None:
+    """Append an audit entry when an audit logger is configured."""
+    if audit_logger is None:
+        return
+    audit_logger.log(
+        action=action,
+        target=target,
+        phase=phase,
+        params=params,
+        result=result[:500],
+    )
+
+
+def _execution_params(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Return non-target kwargs suitable for audit metadata."""
+    return {k: v for k, v in kwargs.items() if k != "target"}
+
+
 def _sanitize_args(kwargs: dict[str, Any]) -> dict[str, Any]:
     """Robustly unwrap common LLM hallucinations in tool arguments.
 
     Local models often pass {"target": {"target": "127.0.0.1"}} instead of
     {"target": "127.0.0.1"}. This helper flattens such structures.
     """
-    sanitized = {}
+    sanitized: dict[str, Any] = {}
     for k, v in kwargs.items():
         if isinstance(v, dict) and k in v:
             # Unwrap nested dict: {"target": {"target": "..."}} -> "..."
@@ -70,7 +96,7 @@ def make_tool(
         if scope_guard and candidate_target:
             authorized, reason = scope_guard.authorize(candidate_target, func.__name__)
             if not authorized:
-                return json.dumps(
+                result = json.dumps(
                     {
                         "error": f"OUT_OF_SCOPE: {reason}",
                         "tool": func.__name__,
@@ -78,12 +104,21 @@ def make_tool(
                         "authorized": False,
                     }
                 )
+                _audit_log(
+                    audit_logger,
+                    action=func.__name__,
+                    target=candidate_target,
+                    phase="denied",
+                    params=_execution_params(kwargs),
+                    result=result,
+                )
+                return result
 
         # 2. HITL approval for high-risk actions
         if hitl_required:
             hitl_target = candidate_target or "unknown"
             if hitl_gate is None:
-                return json.dumps(
+                result = json.dumps(
                     {
                         "error": "HITL_DENIED: approval gate is not configured",
                         "tool": func.__name__,
@@ -92,6 +127,15 @@ def make_tool(
                         "hitl_required": True,
                     }
                 )
+                _audit_log(
+                    audit_logger,
+                    action=func.__name__,
+                    target=hitl_target,
+                    phase="hitl_denied",
+                    params=_execution_params(kwargs),
+                    result=result,
+                )
+                return result
 
             approved = hitl_gate.request(
                 action=func.__name__,
@@ -100,7 +144,7 @@ def make_tool(
                 details=_hitl_details(args, kwargs),
             )
             if not approved:
-                return json.dumps(
+                result = json.dumps(
                     {
                         "error": "HITL_DENIED: human approval was denied",
                         "tool": func.__name__,
@@ -109,15 +153,24 @@ def make_tool(
                         "hitl_required": True,
                     }
                 )
+                _audit_log(
+                    audit_logger,
+                    action=func.__name__,
+                    target=hitl_target,
+                    phase="hitl_denied",
+                    params=_execution_params(kwargs),
+                    result=result,
+                )
+                return result
 
         # 3. Audit log start
-        if audit_logger:
-            audit_logger.log(
-                action=func.__name__,
-                target=candidate_target or "unknown",
-                phase="started",
-                params={k: v for k, v in kwargs.items() if k != "target"},
-            )
+        _audit_log(
+            audit_logger,
+            action=func.__name__,
+            target=candidate_target or "unknown",
+            phase="started",
+            params=_execution_params(kwargs),
+        )
 
         # 4. Execute with timeout
         try:
@@ -131,13 +184,13 @@ def make_tool(
             phase = "error"
 
         # 5. Audit log completion
-        if audit_logger:
-            audit_logger.log(
-                action=func.__name__,
-                target=candidate_target or "unknown",
-                phase=phase,
-                result=result[:500] if isinstance(result, str) else "",
-            )
+        _audit_log(
+            audit_logger,
+            action=func.__name__,
+            target=candidate_target or "unknown",
+            phase=phase,
+            result=result if isinstance(result, str) else "",
+        )
 
         return result
 
@@ -171,18 +224,41 @@ def make_tool_from_cmd(
         if scope_guard and candidate_target:
             authorized, reason = scope_guard.authorize(candidate_target, name)
             if not authorized:
-                return json.dumps({"error": f"OUT_OF_SCOPE: {reason}", "tool": name})
+                output = json.dumps({"error": f"OUT_OF_SCOPE: {reason}", "tool": name})
+                _audit_log(
+                    audit_logger,
+                    action=name,
+                    target=candidate_target,
+                    phase="denied",
+                    params=_execution_params(kwargs),
+                    result=output,
+                )
+                return output
 
         # 2. Audit log start
-        if audit_logger:
-            audit_logger.log(action=name, target=kwargs.get("target", ""), phase="started")
+        _audit_log(
+            audit_logger,
+            action=name,
+            target=candidate_target or "unknown",
+            phase="started",
+            params=_execution_params(kwargs),
+        )
 
         # 3. Build command (only uses parameters found in the command template)
         try:
             cmd = [part.format(**kwargs) for part in command]
         except KeyError as e:
             # If the LLM missed a required parameter that the command template needs
-            return json.dumps({"error": f"MISSING_PARAMETER: {str(e)}", "tool": name})
+            output = json.dumps({"error": f"MISSING_PARAMETER: {str(e)}", "tool": name})
+            _audit_log(
+                audit_logger,
+                action=name,
+                target=candidate_target or "unknown",
+                phase="error",
+                params=_execution_params(kwargs),
+                result=output,
+            )
+            return output
 
         # 4. Execution
         try:
@@ -204,13 +280,13 @@ def make_tool_from_cmd(
             phase = "error"
 
         # 5. Audit log completion
-        if audit_logger:
-            audit_logger.log(
-                action=name,
-                target=kwargs.get("target", ""),
-                phase=phase,
-                result=output[:500],
-            )
+        _audit_log(
+            audit_logger,
+            action=name,
+            target=candidate_target or "unknown",
+            phase=phase,
+            result=output,
+        )
 
         return output
 

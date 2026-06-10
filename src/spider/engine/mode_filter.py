@@ -53,9 +53,7 @@ def filter_topology_for_mode(topology: GraphTopology, mode: ScanMode) -> GraphTo
                 # Don't filter out - just warn, but fix the inputs list
                 # Remove unsatisfiable inputs from the node definition
                 node.inputs = [
-                    i
-                    for i in node.inputs
-                    if i.lower() in allowed_outputs or i == "target"
+                    i for i in node.inputs if i.lower() in allowed_outputs or i == "target"
                 ]
 
     # Rebuild edges

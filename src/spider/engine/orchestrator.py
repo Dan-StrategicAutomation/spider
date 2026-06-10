@@ -191,6 +191,7 @@ class SpiderOrchestrator:
         self.progress_fn("evaluate", "Evaluating output quality...")
         healed = self._heal_loop(
             goal=goal,
+            target=target,
             topology=topology,
             node_modules=node_modules,
             tools=tools,
@@ -212,6 +213,7 @@ class SpiderOrchestrator:
     def _heal_loop(
         self,
         goal: str,
+        target: str,
         topology: GraphTopology,
         node_modules: dict[str, dspy.Module],
         tools: dict[str, dspy.Tool],
@@ -267,7 +269,7 @@ class SpiderOrchestrator:
                 tool_catalog = build_tool_catalog(set(tools.keys()), mode)
                 new_prediction = self.weaver(
                     goal=goal,
-                    target_info=kwargs.get("target", ""),
+                    target_info=target,
                     constraints_text=self.config.rules_of_engagement,
                     tool_catalog=tool_catalog,
                     previous_result=str(current_result),
@@ -280,7 +282,7 @@ class SpiderOrchestrator:
                     topology=new_topology,
                     node_modules=new_modules,
                     goal=goal,
-                    target=kwargs.get("target", ""),
+                    target=target,
                     tools=tools,
                     progress_fn=self.progress_fn,
                 )
