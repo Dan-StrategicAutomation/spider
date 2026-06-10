@@ -221,9 +221,9 @@ Active Directory attack path analysis. Maps trust relationships and abuse paths.
 **Type**: Wrapper | **Phase**: Post-Exploitation | **HITL**: Yes
 Lateral movement and credential testing across Windows networks.
 
-### responder_run(interface)
+### responder_run(target, interface)
 **Type**: Wrapper | **Phase**: Post-Exploitation | **HITL**: Yes
-LLMNR/NBT-NS/MDNS poisoning for credential capture.
+LLMNR/NBT-NS/MDNS poisoning for credential capture. The target is part of the public tool signature for scope authorization and audit correlation.
 
 ## Tool Adapter
 
