@@ -12,7 +12,9 @@ import dspy
 
 from spider.config import SpiderConfig
 from spider.engine.tool_registry import (
-    ATTACK_PLAN_TOOLS,
+    EXPLOIT_EXECUTION_TOOLS,
+    EXPLOIT_PLANNING_TOOLS,
+    POST_EXPLOIT_TOOLS,
     RECON_TOOLS,
     SVC_ENUM_TOOLS,
     VULN_TOOLS,
@@ -43,7 +45,9 @@ _OUTPUT_TOOL_MAP: dict[str, frozenset[str]] = {
     "web_findings": WEB_ENUM_TOOLS,
     "service_details": SVC_ENUM_TOOLS,
     "vulnerabilities": VULN_TOOLS,
-    "attack_plan": ATTACK_PLAN_TOOLS,
+    "attack_plan": EXPLOIT_PLANNING_TOOLS,
+    "exploit_result": EXPLOIT_EXECUTION_TOOLS,
+    "post_exploit_result": POST_EXPLOIT_TOOLS,
 }
 
 
