@@ -191,7 +191,9 @@ def _build_goal(mode: ScanMode, target: str, custom_goal: str = "") -> str:
     )
 
 
-def run_scan_noninteractive(session_db, orchestrator, target: str, mode: ScanMode):
+def run_scan_noninteractive(
+    session_db, orchestrator, target: str, mode: ScanMode, custom_goal: str = ""
+):
     """Run a single scan non-interactively (used by --scan flag)."""
     divider("NEW SCAN")
     info(f"Target: {target}")
@@ -206,7 +208,7 @@ def run_scan_noninteractive(session_db, orchestrator, target: str, mode: ScanMod
     session_id = session_db.create_session(target)
     success(f"Session created — ID {session_id}")
 
-    goal = _build_goal(mode, target)
+    goal = _build_goal(mode, target, custom_goal=custom_goal)
 
     divider("SCANNING")
     info(f"Goal: {goal[:80]}...")
@@ -623,7 +625,9 @@ def main():
         except Exception as e:
             error(f"Failed to initialize: {e}")
             sys.exit(1)
-        run_scan_noninteractive(session_db, orchestrator, target=args.scan, mode=mode)
+        run_scan_noninteractive(
+            session_db, orchestrator, target=args.scan, mode=mode, custom_goal=args.goal
+        )
         return
 
     banner()
