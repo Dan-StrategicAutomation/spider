@@ -8,11 +8,15 @@ import functools
 import json
 import shutil
 import subprocess
+from collections.abc import Callable
+from typing import Any
 
 import dspy
 
+from spider.sandbox.hitl_gate import HITLGate
 
-def _sanitize_args(kwargs: dict) -> dict:
+
+def _sanitize_args(kwargs: dict[str, Any]) -> dict[str, Any]:
     """Robustly unwrap common LLM hallucinations in tool arguments.
 
     Local models often pass {"target": {"target": "127.0.0.1"}} instead of
@@ -28,7 +32,22 @@ def _sanitize_args(kwargs: dict) -> dict:
     return sanitized
 
 
-def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300, required_binary=None):
+def _hitl_details(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
+    """Build JSON details for a HITL approval request."""
+    return json.dumps({"args": args, "kwargs": kwargs}, default=str)
+
+
+def make_tool(
+    func: Callable[..., str],
+    *,
+    scope_guard: Any | None = None,
+    audit_logger: Any | None = None,
+    timeout: int = 300,
+    required_binary: str | None = None,
+    hitl_gate: HITLGate | None = None,
+    hitl_required: bool = False,
+    risk_level: str = "high",
+) -> dspy.Tool | None:
     """Wrap a tool function with scope checking, audit logging, and timeout.
 
     Returns a dspy.Tool that can be passed to dspy.ReAct, or None if a
@@ -60,7 +79,38 @@ def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300, require
                     }
                 )
 
-        # 2. Audit log start
+        # 2. HITL approval for high-risk actions
+        if hitl_required:
+            hitl_target = candidate_target or "unknown"
+            if hitl_gate is None:
+                return json.dumps(
+                    {
+                        "error": "HITL_DENIED: approval gate is not configured",
+                        "tool": func.__name__,
+                        "target": hitl_target,
+                        "approved": False,
+                        "hitl_required": True,
+                    }
+                )
+
+            approved = hitl_gate.request(
+                action=func.__name__,
+                target=hitl_target,
+                risk_level=risk_level,
+                details=_hitl_details(args, kwargs),
+            )
+            if not approved:
+                return json.dumps(
+                    {
+                        "error": "HITL_DENIED: human approval was denied",
+                        "tool": func.__name__,
+                        "target": hitl_target,
+                        "approved": False,
+                        "hitl_required": True,
+                    }
+                )
+
+        # 3. Audit log start
         if audit_logger:
             audit_logger.log(
                 action=func.__name__,
@@ -69,7 +119,7 @@ def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300, require
                 params={k: v for k, v in kwargs.items() if k != "target"},
             )
 
-        # 3. Execute with timeout
+        # 4. Execute with timeout
         try:
             result = func(*args, **kwargs)
             phase = "completed"
@@ -80,7 +130,7 @@ def make_tool(func, *, scope_guard=None, audit_logger=None, timeout=300, require
             result = json.dumps({"error": str(e)})
             phase = "error"
 
-        # 4. Audit log completion
+        # 5. Audit log completion
         if audit_logger:
             audit_logger.log(
                 action=func.__name__,
