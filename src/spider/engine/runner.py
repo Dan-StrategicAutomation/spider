@@ -9,7 +9,6 @@ import sys
 from typing import Any
 
 import dspy
-from pydantic import BaseModel
 
 from spider.schemas import GraphTopology
 
@@ -98,76 +97,47 @@ class GraphRunner(dspy.Module):
         return {}, []
 
     def _get_module_inputs(self, node_id: str, all_results: dict[str, Any]) -> dict[str, Any]:
-        """Build input dict from signature's InputField definitions.
+        """Build input dict from required signature InputField definitions.
 
-        Uses naming-based mapping first. If names don't match, falls back to
-        positional mapping based on the NodeDef.inputs list.
-        If a field is still missing, provides a default value based on type annotation.
+        Inputs may come only from explicitly declared runtime inputs or from
+        upstream node outputs already present in the accumulated results.
+        Missing required fields fail clearly instead of synthesizing empty
+        placeholder models.
         """
         module = self.node_modules[node_id]
         input_fields, _ = self._get_signature_fields(module)
         node_def = next(n for n in self.topology.nodes if n.id == node_id)
+        runtime_inputs = set(self.topology.runtime_inputs)
+        producer_by_output = {n.output: n.id for n in self.topology.nodes}
 
         inputs = {}
 
-        # 1. Populate from results (direct name match or positional)
+        def is_available_source(source_name: str) -> bool:
+            if source_name not in all_results:
+                return False
+            if source_name in runtime_inputs:
+                return True
+            producer_id = producer_by_output.get(source_name)
+            return producer_id is not None and producer_id in all_results
+
+        # 1. Populate from explicit runtime inputs or completed upstream outputs.
         for i, field_name in enumerate(input_fields.keys()):
-            if field_name in all_results:
+            if is_available_source(field_name):
                 inputs[field_name] = all_results[field_name]
             elif i < len(node_def.inputs):
                 topo_input_name = node_def.inputs[i]
-                if topo_input_name in all_results:
+                if is_available_source(topo_input_name):
                     inputs[field_name] = all_results[topo_input_name]
 
-        # 2. Safety: Provide defaults for missing required inputs
-        for field_name, field_info in input_fields.items():
+        # 2. Fail clearly for missing required inputs.
+        for field_name in input_fields:
             if field_name not in inputs:
-                # CHECK: Is this input expected from a node that hasn't run yet?
-                upstream_nodes = [
-                    n.id
-                    for n in self.topology.nodes
-                    if n.output == field_name or n.id == field_name
-                ]
-                pending = [uid for uid in upstream_nodes if uid not in all_results]
-
-                warning_suffix = ""
-                if pending:
-                    warning_suffix = f" (Waiting for: {', '.join(pending)})"
-                elif field_name not in ["target"]:  # 'target' is a root input
-                    warning_suffix = " (No producer found in topology)"
-
-                # Try to generate a default based on annotation
-                annotation = getattr(field_info, "annotation", None)
-                default_val = None
-
-                if annotation:
-                    try:
-                        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-                            default_val = annotation()
-                        elif annotation is str:
-                            default_val = ""
-                        elif annotation is int:
-                            default_val = 0
-                        elif annotation is list:
-                            default_val = []
-                        elif annotation is dict:
-                            default_val = {}
-                    except Exception:
-                        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-                            default_val = annotation.model_construct()
-                        else:
-                            default_val = None
-
-                if default_val is not None:
-                    ann_name = (
-                        annotation.__name__ if hasattr(annotation, "__name__") else str(annotation)
-                    )
-                    msg = (
-                        f"  [!] Node {node_id} missing {field_name}, "
-                        f"providing empty {ann_name}{warning_suffix}"
-                    )
-                    self.progress_fn("input_fallback", msg)
-                    inputs[field_name] = default_val
+                raise ValueError(
+                    f"Node '{node_id}' missing required signature input '{field_name}'. "
+                    f"Cannot source it from runtime inputs or upstream node outputs. "
+                    f"Declared topology inputs for node '{node_id}': {node_def.inputs}. "
+                    f"Declared runtime inputs: {self.topology.runtime_inputs}."
+                )
 
         # 3. Filter inputs to only include keys that are in the signature
         # This prevents "unexpected keyword argument" errors when modules
@@ -178,6 +148,7 @@ class GraphRunner(dspy.Module):
         # 4. Filter against the actual 'forward' method signature to catch any
         # lingering artifacts from nested signature extraction (e.g., DSPy internals).
         import inspect
+
         try:
             # We inspect the unbound class method to avoid triggering DSPy's
             # instance-level __getattribute__ warnings for direct forward() access
@@ -212,9 +183,8 @@ class GraphRunner(dspy.Module):
                 self.progress_fn("node_running", f"  LLM running: {node_def.name}")
                 module = self.node_modules[nid]
 
-                inputs = self._get_module_inputs(nid, all_results)
-
                 try:
+                    inputs = self._get_module_inputs(nid, all_results)
 
                     async def do_call():
                         ac = dspy.asyncify(module)
