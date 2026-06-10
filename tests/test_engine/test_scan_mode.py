@@ -11,7 +11,14 @@ import pytest
 
 from spider.config import SpiderConfig
 from spider.engine.mode_filter import filter_topology_for_mode
-from spider.engine.tool_registry import build_tool_catalog, build_tools
+from spider.engine.tool_registry import (
+    EXPLOIT_EXECUTION_TOOLS,
+    EXPLOIT_PLANNING_TOOLS,
+    PAYLOAD_TOOLS,
+    POST_EXPLOIT_TOOLS,
+    build_tool_catalog,
+    build_tools,
+)
 from spider.engine.weaver import build_default_topology
 from spider.schemas import ScanMode
 
@@ -31,16 +38,11 @@ def config():
 
 # ── Tool Registration Tests ───────────────────────────────────────────────────
 
-EXPLOIT_TOOL_NAMES = frozenset(
-    {
-        "attack_chain_builder",
-        "exploit_matcher",
-        "metasploit_exploit",
-        "payload_generator",
-        "shell_reverse",
-        "persist_agent",
-        "pivot_agent",
-    }
+EXPLOIT_TOOL_NAMES = (
+    (EXPLOIT_PLANNING_TOOLS - {"cve_intelligence"})
+    | PAYLOAD_TOOLS
+    | EXPLOIT_EXECUTION_TOOLS
+    | POST_EXPLOIT_TOOLS
 )
 
 
@@ -96,10 +98,33 @@ def test_full_catalog_has_exploit_tools():
     """FULL catalog should populate exploit_tools."""
     tools = build_tools(mode=ScanMode.FULL)
     catalog = build_tool_catalog(set(tools.keys()), ScanMode.FULL)
-    # The catalog should list whatever tools were registered and matched
-    # We can't assert exact names since make_tool may filter some,
-    # but the list should be built from ATTACK_PLAN_TOOLS
     assert isinstance(catalog.exploit_tools, list)
+
+
+def test_full_catalog_includes_available_execution_and_post_exploit_tools(monkeypatch):
+    """FULL catalog lists registered execution and post-exploitation tools."""
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda binary: f"/usr/bin/{binary}")
+
+    tools = build_tools(mode=ScanMode.FULL)
+    catalog = build_tool_catalog(set(tools.keys()), ScanMode.FULL)
+
+    assert set(catalog.exploit_tools) >= EXPLOIT_EXECUTION_TOOLS
+    assert set(catalog.post_exploit_tools) >= POST_EXPLOIT_TOOLS
+
+
+def test_custom_catalog_includes_available_execution_and_post_exploit_tools(monkeypatch):
+    """CUSTOM catalog lists registered execution and post-exploitation tools."""
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda binary: f"/usr/bin/{binary}")
+
+    tools = build_tools(mode=ScanMode.CUSTOM)
+    catalog = build_tool_catalog(set(tools.keys()), ScanMode.CUSTOM)
+
+    assert set(catalog.exploit_tools) >= EXPLOIT_EXECUTION_TOOLS
+    assert set(catalog.post_exploit_tools) >= POST_EXPLOIT_TOOLS
 
 
 # ── Default Topology Tests ────────────────────────────────────────────────────

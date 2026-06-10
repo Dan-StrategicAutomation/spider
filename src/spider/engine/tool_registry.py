@@ -27,21 +27,15 @@ RECON_TOOLS = frozenset(
 
 WEB_ENUM_TOOLS = frozenset(
     {
-        "dirb_scan",
+        "gobuster_scan",
+        "ffuf_scan",
         "nikto_scan",
-        "wapitizer",
-        "param_spider",
-        "webtech_scan",
     }
 )
 
 SVC_ENUM_TOOLS = frozenset(
     {
-        "smb_enum",
-        "mysql_enum",
-        "postgres_enum",
-        "ssh_enum",
-        "ftp_enum",
+        "enum4linux",
     }
 )
 
@@ -49,18 +43,41 @@ VULN_TOOLS = frozenset(
     {
         "nmap_nse",
         "nuclei_scan",
-        "sqlmap_scan",
-        "exploit_matcher",
+        "trivy_scan",
     }
 )
 
-ATTACK_PLAN_TOOLS = frozenset(
+EXPLOIT_PLANNING_TOOLS = frozenset(
     {
         "cve_intelligence",
         "exploit_matcher",
         "attack_chain_builder",
     }
 )
+
+PAYLOAD_TOOLS = frozenset(
+    {
+        "payload_generator",
+    }
+)
+
+EXPLOIT_EXECUTION_TOOLS = frozenset(
+    {
+        "sqlmap_run",
+        "hydra_run",
+        "metasploit_run",
+    }
+)
+
+POST_EXPLOIT_TOOLS = frozenset(
+    {
+        "bloodhound_run",
+        "crackmapexec_run",
+        "responder_run",
+    }
+)
+
+EXPLOIT_TOOLS = EXPLOIT_PLANNING_TOOLS | PAYLOAD_TOOLS | EXPLOIT_EXECUTION_TOOLS
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -137,5 +154,6 @@ def build_tool_catalog(tool_names: set[str], mode: ScanMode) -> ToolCatalog:
         web_enum_tools=sorted(tool_names & WEB_ENUM_TOOLS),
         service_enum_tools=sorted(tool_names & SVC_ENUM_TOOLS),
         vuln_tools=sorted(tool_names & VULN_TOOLS),
-        exploit_tools=sorted(tool_names & ATTACK_PLAN_TOOLS),
+        exploit_tools=sorted(tool_names & EXPLOIT_TOOLS),
+        post_exploit_tools=sorted(tool_names & POST_EXPLOIT_TOOLS),
     )

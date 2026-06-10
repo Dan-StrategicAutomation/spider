@@ -331,25 +331,27 @@ class ToolCatalog(BaseModel):
     )
     web_enum_tools: list[str] = Field(
         default_factory=list,
-        description="Web enumeration: dirb_scan, nikto_scan, wapitizer, param_spider, webtech_scan",
+        description="Web enumeration: gobuster_scan, ffuf_scan, nikto_scan",
     )
     service_enum_tools: list[str] = Field(
         default_factory=list,
-        description="Service enumeration: smb_enum, mysql_enum, postgres_enum, ssh_enum, ftp_enum",
+        description="Service enumeration: enum4linux",
     )
     vuln_tools: list[str] = Field(
         default_factory=list,
-        description="Vulnerability scanning: nmap_nse, nuclei_scan, sqlmap_scan, exploit_matcher",
+        description="Vulnerability scanning: nmap_nse, nuclei_scan, trivy_scan",
     )
     exploit_tools: list[str] = Field(
         default_factory=list,
         description=(
-            "Exploitation: cve_intelligence, exploit_matcher, "
-            "attack_chain_builder, payload_generator"
+            "Exploitation planning, payload, and execution: cve_intelligence, "
+            "exploit_matcher, attack_chain_builder, payload_generator, "
+            "sqlmap_run, hydra_run, metasploit_run"
         ),
     )
     post_exploit_tools: list[str] = Field(
-        default_factory=list, description="Post-exploitation: shell_reverse, persist, pivot"
+        default_factory=list,
+        description="Post-exploitation: bloodhound_run, crackmapexec_run, responder_run",
     )
 
 
