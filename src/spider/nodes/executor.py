@@ -38,6 +38,7 @@ class ExecutorModule(dspy.Module):
 
         super().__init__()
         self.config = config
+        self.hitl_gate = hitl_gate
         base = dspy.ReAct(ExecutorSignature, tools=tools, max_iters=10)
 
         def exec_reward(args: dict, pred: dspy.Prediction) -> float:

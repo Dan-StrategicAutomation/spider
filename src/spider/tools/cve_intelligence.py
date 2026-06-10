@@ -119,6 +119,7 @@ def cve_intelligence(
     version: str,
     cpe: str = "",
     limit: int = 10,
+    **kwargs,
 ) -> str:
     """Look up known CVEs for a service/version across NVD, CISA KEV, and EPSS.
 

@@ -46,4 +46,3 @@ class ReporterModule(dspy.Module):
                 vulnerabilities=vulnerabilities,
                 attack_plan=attack_plan,
             )
-

@@ -9,7 +9,15 @@ from collections.abc import Callable
 import dspy
 
 from spider.config import SpiderConfig
-from spider.schemas import EdgeDef, GraphTopology, NodeDef, NodeRole, TopologyScore
+from spider.schemas import (
+    EdgeDef,
+    GraphTopology,
+    NodeDef,
+    NodeRole,
+    ScanMode,
+    ToolCatalog,
+    TopologyScore,
+)
 
 
 class TopologyEvalSignature(dspy.Signature):
@@ -64,11 +72,12 @@ class GraphWeaverSignature(dspy.Signature):
     NAMING RULE: Provide descriptive, user-friendly 'name' fields for each node
     (e.g., 'Target Reconnaissance' instead of 'react_node_1')."""
 
-
     goal: str = dspy.InputField()
     target_info: str = dspy.InputField()
     constraints_text: str = dspy.InputField()
-    available_tools: str = dspy.InputField()
+    tool_catalog: ToolCatalog = dspy.InputField(
+        desc="Catalog of available tools organized by category"
+    )
     topology: GraphTopology = dspy.OutputField()
 
 
@@ -114,7 +123,6 @@ class GraphWeaver(dspy.Module):
         else:
             self.weave = base_weave
 
-
     def forward(self, goal: str, progress_fn: Callable | None = None, **kwargs) -> dspy.Prediction:
         if progress_fn:
             self.progress_fn = progress_fn
@@ -122,8 +130,15 @@ class GraphWeaver(dspy.Module):
             return self.weave(goal=goal, **kwargs)
 
 
-def build_default_topology() -> GraphTopology:
-    """Build a default pentest topology when the Weaver is skipped."""
+def build_default_topology(mode: ScanMode) -> GraphTopology | None:
+    """Build a default pentest topology for the given scan mode.
+
+    Returns None for CUSTOM mode — the Weaver must generate a topology
+    from the user's natural language goal.
+    """
+    if mode == ScanMode.CUSTOM:
+        return None
+
     nodes = [
         NodeDef(
             id="recon",
@@ -165,17 +180,26 @@ def build_default_topology() -> GraphTopology:
             depends_on=["web_enum", "service_enum"],
             tools=[],
         ),
-        NodeDef(
-            id="exploit_planner",
-            role=NodeRole.CHAIN_OF_THOUGHT,
-            name="Exploit Planning",
-            description="Build multi-step attack chains from discovered vulnerabilities.",
-            inputs=["vulnerabilities"],
-            output="attack_plan",
-            depends_on=["vuln_analysis"],
-            tools=[],
-        ),
-        NodeDef(
+    ]
+
+    # Exploitation node only in FULL mode
+    if mode == ScanMode.FULL:
+        nodes.append(
+            NodeDef(
+                id="exploit_planner",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Exploit Planning",
+                description="Build multi-step attack chains from discovered vulnerabilities.",
+                inputs=["vulnerabilities"],
+                output="attack_plan",
+                depends_on=["vuln_analysis"],
+                tools=[],
+            )
+        )
+
+    # Reporter always included — inputs depend on mode
+    if mode == ScanMode.FULL:
+        reporter = NodeDef(
             id="reporter",
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Report Generation",
@@ -184,17 +208,30 @@ def build_default_topology() -> GraphTopology:
             output="report",
             depends_on=["recon", "vuln_analysis", "exploit_planner"],
             tools=[],
-        ),
-    ]
+        )
+    else:
+        reporter = NodeDef(
+            id="reporter",
+            role=NodeRole.CHAIN_OF_THOUGHT,
+            name="Report Generation",
+            description="Generate structured recon report with findings and remediation.",
+            inputs=["recon_results", "vulnerabilities"],
+            output="report",
+            depends_on=["recon", "vuln_analysis"],
+            tools=[],
+        )
+    nodes.append(reporter)
 
     edges = []
     for node in nodes:
         for dep in node.depends_on:
             edges.append(EdgeDef(source=dep, target=node.id, label=""))
 
+    objective = "Full penetration test" if mode == ScanMode.FULL else "Reconnaissance scan"
+
     return GraphTopology(
         name="default_pentest",
-        objective="Full penetration test",
+        objective=objective,
         nodes=nodes,
         edges=edges,
         runtime_inputs=["target"],

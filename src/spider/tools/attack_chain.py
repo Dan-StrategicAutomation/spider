@@ -2,11 +2,14 @@
 
 import json
 
+from spider.schemas import VulnerabilityList
+
 
 def attack_chain_builder(
-    vulnerabilities: str = "",
+    vulnerabilities: VulnerabilityList | str = "",
     target_topology: str = "",
     goal: str = "full system access",
+    **kwargs,
 ) -> str:
     """Build multi-step attack chains from discovered vulnerabilities.
 
@@ -14,7 +17,13 @@ def attack_chain_builder(
     lateral movement -> persistence. Prioritizes by stealth and feasibility.
     """
     vulns = []
-    if vulnerabilities:
+
+    if isinstance(vulnerabilities, VulnerabilityList):
+        vulns = [
+            v.model_dump() if hasattr(v, "model_dump") else dict(v)
+            for v in vulnerabilities.vulnerabilities
+        ]
+    elif vulnerabilities:
         try:
             vulns = json.loads(vulnerabilities)
         except json.JSONDecodeError:
@@ -35,23 +44,40 @@ def attack_chain_builder(
             }
         )
 
+    def get_cvss(v: str | dict) -> float:
+        if isinstance(v, str):
+            return 0.0
+        if isinstance(v, dict):
+            return v.get("cvss", 0) or v.get("severity", 0)
+        return 0
+
+    def get_cve_id(v: str | dict) -> str:
+        if isinstance(v, str):
+            return v.split(":")[0] if ":" in v else v
+        if isinstance(v, dict):
+            cve = v.get("cve", {})
+            if isinstance(cve, dict):
+                return cve.get("cve_id", "unknown")
+            return cve if cve else v.get("cve_id", "unknown")
+        return "unknown"
+
     chains = []
     chain_id = 1
 
-    high_vulns = [v for v in vulns if v.get("cvss", 0) >= 7.0]
-    med_vulns = [v for v in vulns if 4.0 <= v.get("cvss", 0) < 7.0]
-    [v for v in vulns if v.get("cvss", 0) < 4.0]
+    high_vulns = [v for v in vulns if get_cvss(v) >= 7.0]
+    med_vulns = [v for v in vulns if 4.0 <= get_cvss(v) < 7.0]
 
     if high_vulns:
         step_num = 1
         steps = []
         for v in high_vulns[:3]:
+            cve = get_cve_id(v)
             steps.append(
                 {
                     "step_number": step_num,
-                    "action": f"Exploit {v.get('cve_id', 'unknown')}",
+                    "action": f"Exploit {cve}",
                     "tool": "metasploit",
-                    "cve_id": v.get("cve_id"),
+                    "cve_id": cve,
                     "expected_outcome": "Initial access via high-severity vulnerability",
                     "hitl_required": True,
                     "risk_level": "critical",
@@ -75,12 +101,13 @@ def attack_chain_builder(
         step_num = 1
         steps = []
         for v in med_vulns[:3]:
+            cve = get_cve_id(v)
             steps.append(
                 {
                     "step_number": step_num,
-                    "action": f"Exploit {v.get('cve_id', 'unknown')}",
+                    "action": f"Exploit {cve}",
                     "tool": "nuclei",
-                    "cve_id": v.get("cve_id"),
+                    "cve_id": cve,
                     "expected_outcome": "Access via medium-severity vulnerability",
                     "hitl_required": True,
                     "risk_level": "high",

@@ -4,6 +4,7 @@ Wires together the GraphWeaver, tool provisioning, GraphRunner, and
 auto-healing loop for end-to-end pentest execution.
 """
 
+import os
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
@@ -11,10 +12,14 @@ from typing import Any
 import dspy
 
 from spider.config import SpiderConfig
+from spider.engine.mode_filter import filter_topology_for_mode
+from spider.engine.node_factory import build_node_modules
 from spider.engine.runner import GraphRunner
+from spider.engine.tool_registry import build_tool_catalog, build_tools
 from spider.engine.weaver import GraphTopology, GraphWeaver
 from spider.sandbox.hitl_gate import HITLGate
 from spider.sandbox.scope_guard import ScopeGuard
+from spider.schemas import ScanMode
 from spider.tui.session import SessionStore
 
 
@@ -46,53 +51,34 @@ class SpiderOrchestrator:
         self.session_store = session_store
         self.audit_logger = audit_logger
         self._all_tools: dict[str, dspy.Tool] = {}
+        self._tools_by_mode: dict[ScanMode, dict[str, dspy.Tool]] = {}
 
     @property
     def tools(self) -> dict[str, dspy.Tool]:
         """Lazy-load and return all registered tools."""
         return self._build_tools(
+            mode=ScanMode.FULL,
             scope_guard=self.scope_guard,
             audit_logger=self.audit_logger,
         )
 
     def _build_tools(
         self,
+        mode: ScanMode = ScanMode.FULL,
         scope_guard: ScopeGuard | None = None,
         audit_logger: Any | None = None,
     ) -> dict[str, dspy.Tool]:
-        """Build all security tools with scope guard and audit wrapper."""
-        if self._all_tools:
-            return self._all_tools
-
-        from spider.tools.attack_chain import register_all as chain_reg
-        from spider.tools.cve_intelligence import register_all as cve_reg
-        from spider.tools.enum_tools import register_all as enum_reg
-        from spider.tools.exploit_matcher import register_all as match_reg
-        from spider.tools.exploitation import register_all as exploit_reg
-        from spider.tools.payload_gen import register_all as payload_reg
-        from spider.tools.post_exploit_tools import register_all as post_reg
-        from spider.tools.recon_tools import register_all as recon_reg
-        from spider.tools.vuln_scanners import register_all as vuln_reg
-
-        kw = {
-            "scope_guard": scope_guard,
-            "audit_logger": audit_logger,
-        }
-
-        self._all_tools.update(recon_reg(**kw))
-        self._all_tools.update(enum_reg(**kw))
-        self._all_tools.update(vuln_reg(**kw))
-        self._all_tools.update(cve_reg(**kw))
-        self._all_tools.update(match_reg(**kw))
-        self._all_tools.update(exploit_reg(**kw, hitl_gate=self.hitl_gate))
-        self._all_tools.update(post_reg(**kw, hitl_gate=self.hitl_gate))
-        self._all_tools.update(payload_reg(**kw))
-        self._all_tools.update(chain_reg(**kw))
-
-        # Filter out unavailable tools (None values from make_tool)
-        self._all_tools = {k: v for k, v in self._all_tools.items() if v is not None}
-
-        return self._all_tools
+        """Build security tools with scope guard and scan-mode filtering."""
+        if mode not in self._tools_by_mode:
+            self._tools_by_mode[mode] = build_tools(
+                mode=mode,
+                scope_guard=scope_guard,
+                audit_logger=audit_logger,
+                hitl_gate=self.hitl_gate,
+            )
+        if mode == ScanMode.FULL:
+            self._all_tools = self._tools_by_mode[mode]
+        return self._tools_by_mode[mode]
 
     def _build_node_modules(
         self,
@@ -100,75 +86,13 @@ class SpiderOrchestrator:
         tools: dict[str, dspy.Tool],
     ) -> dict[str, dspy.Module]:
         """Build DSPy modules for each node in the topology."""
-        node_modules: dict[str, dspy.Module] = {}
-
-        from spider.nodes.enum import WebEnumerationModule
-        from spider.nodes.executor import ExecutorModule
-        from spider.nodes.exploit_planner import ExploitPlanningModule
-        from spider.nodes.post_exploit import PostExploitationModule
-        from spider.nodes.recon import ReconModule
-        from spider.nodes.reporter import ReporterModule
-        from spider.nodes.vuln_analysis import VulnerabilityAnalysisModule
-        from spider.schemas import NodeRole
-
-        for node in topology.nodes:
-            node_role = node.role
-            node_id = node.id
-
-            # Filter tools specifically for this node based on weaver topology
-            node_tools = [tools[t.name] for t in node.tools if t.name in tools]
-
-            # Robust Schema-Based Mapping: Map nodes to modules based on their CANONICAL OUTPUT
-            # This is more stable than node ID heuristics as IDs can be anything the weaver chooses.
-            output_name = node.output.lower()
-
-            from spider.nodes.enum import ServiceEnumerationModule, WebEnumerationModule
-            from spider.nodes.executor import ExecutorModule
-            from spider.nodes.exploit_planner import ExploitPlanningModule
-            from spider.nodes.post_exploit import PostExploitationModule
-            from spider.nodes.recon import ReconModule
-            from spider.nodes.reporter import ReporterModule
-            from spider.nodes.vuln_analysis import VulnerabilityAnalysisModule
-
-            if "recon_results" in output_name:
-                node_modules[node_id] = ReconModule(tools=node_tools, config=self.config)
-            elif "service_details" in output_name:
-                node_modules[node_id] = ServiceEnumerationModule(tools=node_tools, config=self.config)
-            elif "web_findings" in output_name:
-                node_modules[node_id] = WebEnumerationModule(tools=node_tools, config=self.config)
-            elif "vulnerabilities" in output_name:
-                node_modules[node_id] = VulnerabilityAnalysisModule(
-                    tools=node_tools, config=self.config
-                )
-            elif "attack_plan" in output_name:
-                node_modules[node_id] = ExploitPlanningModule(tools=node_tools, config=self.config)
-            elif "exploit_result" in output_name:
-                node_modules[node_id] = ExecutorModule(
-                    tools=node_tools,
-                    hitl_gate=self.hitl_gate,
-                    config=self.config,
-                )
-            elif "post_exploit_result" in output_name:
-                node_modules[node_id] = PostExploitationModule(
-                    tools=node_tools,
-                    hitl_gate=self.hitl_gate,
-                    config=self.config,
-                )
-            elif "report" in output_name:
-                node_modules[node_id] = ReporterModule(tools=node_tools, config=self.config)
-            else:
-                # Absolute fallback using role or first best guess
-                if node_role == NodeRole.REACT:
-                    node_modules[node_id] = ReconModule(tools=node_tools, config=self.config)
-                else:
-                    node_modules[node_id] = VulnerabilityAnalysisModule(
-                        tools=node_tools, config=self.config
-                    )
-
-            # Auto-load compiled weights if available
-            self._load_compiled_module(node_modules[node_id])
-
-        return node_modules
+        return build_node_modules(
+            topology=topology,
+            tools=tools,
+            config=self.config,
+            hitl_gate=self.hitl_gate,
+            progress_fn=self.progress_fn,
+        )
 
     def _load_compiled_module(self, module: dspy.Module) -> None:
         """Attempt to load BootstrapFewShot optimized weights for a module."""
@@ -179,9 +103,7 @@ class SpiderOrchestrator:
         if os.path.exists(weights_path):
             try:
                 module.load(weights_path)
-                self.progress_fn(
-                    "optimize_load", f"Loaded compiled weights for {module_name}"
-                )
+                self.progress_fn("optimize_load", f"Loaded compiled weights for {module_name}")
             except Exception as e:
                 self.progress_fn(
                     "optimize_error",
@@ -192,7 +114,7 @@ class SpiderOrchestrator:
         self,
         goal: str,
         target: str,
-        **kwargs: str,
+        **kwargs: Any,
     ) -> dict[str, object]:
         """Execute a full pentest against the given target.
 
@@ -204,6 +126,9 @@ class SpiderOrchestrator:
         Returns:
             Dictionary with topology, execution results, and session ID.
         """
+        mode = kwargs.pop("mode", ScanMode.RECON)
+        if isinstance(mode, str):
+            mode = ScanMode(mode)
         session_id = f"run_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
         # Phase 0: Scope Check
@@ -219,29 +144,28 @@ class SpiderOrchestrator:
 
         # Phase 1: Weave topology from goal and target
         self.progress_fn("weave", "Generating attack topology with DSPy weaver...")
-        tool_names = ", ".join(
-            self._build_tools(scope_guard=self.scope_guard, audit_logger=self.audit_logger).keys()
+        tools = self._build_tools(
+            mode=mode,
+            scope_guard=self.scope_guard,
+            audit_logger=self.audit_logger,
         )
+        tool_catalog = build_tool_catalog(set(tools.keys()), mode)
         with dspy.settings.context(temperature=0.1):
             prediction = self.weaver(
                 goal=goal,
                 target_info=target,
                 constraints_text=self.config.rules_of_engagement,
-                available_tools=tool_names,
+                tool_catalog=tool_catalog,
                 progress_fn=self.progress_fn,
             )
-            topology = prediction.topology
+            topology = filter_topology_for_mode(prediction.topology, mode)
         self.progress_fn(
             "weave_done",
             f"Topology woven: {len(topology.nodes)} nodes, {len(topology.edges)} edges",
         )
 
         # Phase 2: Provision tools
-        self.progress_fn("provision", f"Provisioning {len(self._all_tools)} security tools...")
-        tools = self._build_tools(
-            scope_guard=self.scope_guard,
-            audit_logger=self.audit_logger,
-        )
+        self.progress_fn("provision", f"Provisioning {len(tools)} security tools...")
         self.progress_fn("provision_done", f"Tools ready: {', '.join(tools.keys())}")
 
         # Phase 3: Build node modules with topology + tools
@@ -271,6 +195,7 @@ class SpiderOrchestrator:
             node_modules=node_modules,
             tools=tools,
             initial_result=result,
+            mode=mode,
             **kwargs,
         )
         self.progress_fn("done", "Scan complete")
@@ -279,6 +204,7 @@ class SpiderOrchestrator:
             "session_id": session_id,
             "target": target,
             "goal": goal,
+            "mode": mode.value,
             "topology": topology,
             "result": healed,
         }
@@ -291,7 +217,8 @@ class SpiderOrchestrator:
         tools: dict[str, dspy.Tool],
         initial_result: dict[str, object],
         max_rounds: int = 3,
-        **kwargs: str,
+        mode: ScanMode = ScanMode.RECON,
+        **kwargs: Any,
     ) -> dict[str, object]:
         """Auto-healing: re-run waves with failure context if quality is low."""
         from spider.engine.self_eval import SelfEvaluator
@@ -332,21 +259,22 @@ class SpiderOrchestrator:
             )
 
             with dspy.settings.context(temperature=0.4):
-                tool_names = ", ".join(
-                    self._build_tools(
-                        scope_guard=self.scope_guard, audit_logger=self.audit_logger
-                    ).keys()
+                tools = self._build_tools(
+                    mode=mode,
+                    scope_guard=self.scope_guard,
+                    audit_logger=self.audit_logger,
                 )
+                tool_catalog = build_tool_catalog(set(tools.keys()), mode)
                 new_prediction = self.weaver(
                     goal=goal,
                     target_info=kwargs.get("target", ""),
                     constraints_text=self.config.rules_of_engagement,
-                    available_tools=tool_names,
+                    tool_catalog=tool_catalog,
                     previous_result=str(current_result),
                     feedback=feedback,
                     progress_fn=self.progress_fn,
                 )
-                new_topology = new_prediction.topology
+                new_topology = filter_topology_for_mode(new_prediction.topology, mode)
                 new_modules = self._build_node_modules(new_topology, tools)
                 runner = GraphRunner(
                     topology=new_topology,

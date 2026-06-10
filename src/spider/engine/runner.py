@@ -82,6 +82,10 @@ class GraphRunner(dspy.Module):
                 # Fallback for older DSPy or unexpected structures
                 inp_fields = {getattr(f, "name", str(f)): f for f in inp_fields}
 
+            # Filter out internal DSPy fields that leak through wrappers (e.g. from dspy.ReAct)
+            if "trajectory" in inp_fields:
+                del inp_fields["trajectory"]
+
             out_names = []
             if isinstance(out_fields, dict):
                 out_names = list(out_fields.keys())
@@ -165,7 +169,31 @@ class GraphRunner(dspy.Module):
                     self.progress_fn("input_fallback", msg)
                     inputs[field_name] = default_val
 
-        return inputs
+        # 3. Filter inputs to only include keys that are in the signature
+        # This prevents "unexpected keyword argument" errors when modules
+        # have explicit parameter lists instead of **kwargs
+        valid_input_names = set(input_fields.keys())
+        filtered_inputs = {k: v for k, v in inputs.items() if k in valid_input_names}
+
+        # 4. Filter against the actual 'forward' method signature to catch any
+        # lingering artifacts from nested signature extraction (e.g., DSPy internals).
+        import inspect
+        try:
+            # We inspect the unbound class method to avoid triggering DSPy's
+            # instance-level __getattribute__ warnings for direct forward() access
+            sig = inspect.signature(module.__class__.forward)
+            has_kwargs = any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            )
+            if not has_kwargs:
+                valid_forward_params = set(sig.parameters.keys())
+                filtered_inputs = {
+                    k: v for k, v in filtered_inputs.items() if k in valid_forward_params
+                }
+        except Exception:
+            pass
+
+        return filtered_inputs
 
     async def forward_async(self, **kwargs) -> dspy.Prediction:
         waves = self.topology.topological_waves()

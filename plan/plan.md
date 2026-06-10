@@ -622,39 +622,4 @@ To improve portability and reduce dependency issues, SPIDER will implement Pytho
 - **Gradual Rollout**: Start with DNS/WHOIS, expand based on utility and performance
 
 This approach ensures SPIDER remains functional in restricted environments while still leveraging the power of established security tools when available. The DSPy-native core remains unaffected - only the tool implementation layer gains enhanced portability.
-|| Missing binary dependencies | Medium | Python-native alternatives for core functions, graceful degradation |
 
-## 13. Tool Enhancement Strategy
-
-To improve portability and reduce dependency issues, SPIDER will implement Python-native alternatives for core security tool functions where performance permits:
-
-### 13.1 DNS Enumeration
-- Replace `dig`/`nslookup` with `dnspython` library for A, AAAA, MX, TXT, NS records
-- Maintains identical JSON output format for DSPy compatibility
-- Optional fallback to system `dig` if available for advanced features (AXFR, etc.)
-
-### 12.2 WHOIS Lookup
-- Replace system `whois` with `python-whois` library
-- Provides structured domain registration data
-- Graceful fallback to binary if library unavailable
-
-### 13.3 Basic Port Scanning
-- TCP connect scanner using `socket` or `scapy` for quick checks
-- Not intended to replace nmap/masscan for full scans
-- Useful for cloud environments where raw sockets are restricted
-- Returns same JSON structure as binary tools
-
-### 13.4 Web Enumeration Supplement
-- Simple `requests`-based directory/parameter fuzzing
-- Wordlist iteration with timeout/retry handling
-- Supplements gobuster/ffuf in constrained environments
-- Identical output format for seamless integration
-
-### 13.5 Implementation Approach
-- **Adapter Enhancement**: Check for Python alternatives before falling back to binaries
-- **Configuration Option**: Allow users to prefer Python tools via `.env` settings
-- **Environment Detection**: Auto-select appropriate tools in restricted environments (containers, cloud)
-- **Backward Compatibility**: All tools maintain identical JSON output signatures
-- **Gradual Rollout**: Start with DNS/WHOIS, expand based on utility and performance
-
-This approach ensures SPIDER remains functional in restricted environments while still leveraging the power of established security tools when available. The DSPy-native core remains unaffected - only the tool implementation layer gains enhanced portability.

@@ -27,8 +27,6 @@ def setup_observability(config: SpiderConfig):
     logger.info(f"Initializing Langfuse Native SDK (Host: {config.langfuse_base_url})")
 
     # 2. Initialize Langfuse client
-    # In Langfuse 4.0+, get_client() automatically registers a LangfuseSpanProcessor
-    # with the global OpenTelemetry TracerProvider if one isn't already set.
     try:
         langfuse = get_client()
         if langfuse.auth_check():

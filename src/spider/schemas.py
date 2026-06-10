@@ -21,6 +21,27 @@ class ScanPhase(StrEnum):
     REPORTING = "reporting"
 
 
+class ScanMode(StrEnum):
+    """Scan execution mode controlling tool availability and topology shape."""
+
+    RECON = "recon"
+    FULL = "full"
+    CUSTOM = "custom"
+
+
+# Canonical output names allowed in recon mode.
+# Used by the orchestrator to hard-filter topology nodes after weaving.
+RECON_OUTPUTS: frozenset[str] = frozenset(
+    {
+        "recon_results",
+        "web_findings",
+        "service_details",
+        "vulnerabilities",
+        "report",
+    }
+)
+
+
 # ── Recon Schemas ────────────────────────────────────────────────────────────
 
 
@@ -62,7 +83,6 @@ class ReconResults(BaseModel):
         return str(v)
 
 
-
 # ── Enumeration Schemas ──────────────────────────────────────────────────────
 
 
@@ -97,7 +117,6 @@ class WebFindings(BaseModel):
         return str(v)
 
 
-
 class ServiceDetails(BaseModel):
     service_name: str = ""
 
@@ -113,7 +132,6 @@ class ServiceDetails(BaseModel):
         if isinstance(v, str) and len(v) > 10000:
             return f"{v[:10000]}... [TRUNCATED]"
         return str(v)
-
 
 
 # ── Vulnerability Schemas ────────────────────────────────────────────────────
@@ -176,7 +194,6 @@ class VulnerabilityList(BaseModel):
         return str(v)
 
 
-
 # ── Exploit Planning Schemas ─────────────────────────────────────────────────
 
 
@@ -220,7 +237,6 @@ class AttackPlan(BaseModel):
         if isinstance(v, str) and len(v) > 10000:
             return f"{v[:10000]}... [TRUNCATED]"
         return str(v)
-
 
 
 # ── Exploitation Schemas ─────────────────────────────────────────────────────
@@ -287,7 +303,6 @@ class PentestReport(BaseModel):
         return str(v)
 
 
-
 # ── Topology Schemas (Graph Definition) ──────────────────────────────────────
 
 
@@ -302,6 +317,40 @@ class ToolDef(BaseModel):
     name: str
     description: str = ""
     parameters: list[dict] = Field(default_factory=list)
+
+
+class ToolCatalog(BaseModel):
+    """Structured tool catalog for Weaver input."""
+
+    recon_tools: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Recon tools: dns_enum, subdomain_enum, whois_lookup, "
+            "tcp_port_scan, nmap_scan, masscan_scan"
+        ),
+    )
+    web_enum_tools: list[str] = Field(
+        default_factory=list,
+        description="Web enumeration: dirb_scan, nikto_scan, wapitizer, param_spider, webtech_scan",
+    )
+    service_enum_tools: list[str] = Field(
+        default_factory=list,
+        description="Service enumeration: smb_enum, mysql_enum, postgres_enum, ssh_enum, ftp_enum",
+    )
+    vuln_tools: list[str] = Field(
+        default_factory=list,
+        description="Vulnerability scanning: nmap_nse, nuclei_scan, sqlmap_scan, exploit_matcher",
+    )
+    exploit_tools: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Exploitation: cve_intelligence, exploit_matcher, "
+            "attack_chain_builder, payload_generator"
+        ),
+    )
+    post_exploit_tools: list[str] = Field(
+        default_factory=list, description="Post-exploitation: shell_reverse, persist, pivot"
+    )
 
 
 class NodeDef(BaseModel):
@@ -334,8 +383,16 @@ class GraphTopology(BaseModel):
         """Ensure edges reflect the depends_on list of nodes."""
         id_set = {n.id for n in self.nodes}
         current_edges = {(e.source, e.target) for e in self.edges}
+        output_to_id = {n.output: n.id for n in self.nodes}
 
         for node in self.nodes:
+            # Auto-link missing dependencies based on inputs matching other nodes' outputs
+            for inp in node.inputs:
+                if inp in output_to_id:
+                    producer_id = output_to_id[inp]
+                    if producer_id != node.id and producer_id not in node.depends_on:
+                        node.depends_on.append(producer_id)
+
             for dep in node.depends_on:
                 if dep not in id_set:
                     # Ignore external runtime inputs (like 'target')
@@ -345,6 +402,7 @@ class GraphTopology(BaseModel):
                     continue
                 if (dep, node.id) not in current_edges:
                     self.edges.append(EdgeDef(source=dep, target=node.id, label="data_flow"))
+                    current_edges.add((dep, node.id))
 
         return self
 
@@ -382,7 +440,7 @@ class GraphTopology(BaseModel):
 
         total_in_waves = len(set().union(*(set(w) for w in waves))) if waves else 0
         if total_in_waves != len(id_set):
-            raise ValueError(f"Cycle detected in topology. {len(id_set)-total_in_waves} orphans.")
+            raise ValueError(f"Cycle detected in topology. {len(id_set) - total_in_waves} orphans.")
         return waves
 
 

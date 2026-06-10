@@ -67,6 +67,7 @@ def payload_generator(
     vuln_type: str,
     target_info: str = "",
     constraints: str = "",
+    **kwargs,
 ) -> str:
     """Generate a custom payload for a specific vulnerability type.
 

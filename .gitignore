@@ -18,8 +18,22 @@ build/
 *.swp
 *.swo
 
-# Audit logs (never commit)
-audit.log
+# AI agent directories
+.kilo/
+.claude/
+.kilocode/
+.opencode/
+.scratch/
+cursor/
+windsurf/
+
+# Cache and temporary
+.cache/
+*.tmp
+*.temp
+.ruff_cache/
+.mypy_cache/
+.pyright/
 
 # Test results
 .pytest_cache/

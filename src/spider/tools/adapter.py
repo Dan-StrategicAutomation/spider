@@ -98,6 +98,7 @@ def make_tool_from_cmd(
     name: str,
     command: list[str],
     docstring: str,
+    scope_guard=None,
     audit_logger=None,
     timeout: int = 300,
     required_binary: str | None = None,

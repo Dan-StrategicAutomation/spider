@@ -91,7 +91,6 @@ def get_lm(config: SpiderConfig, role: str = "primary") -> dspy.LM:
     )
 
 
-
 def configure_spider(config: SpiderConfig) -> dspy.LM:
     """Configure DSPy globally with the primary Ollama model.
 

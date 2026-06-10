@@ -1,6 +1,5 @@
 """Scope guard tests -- MUST PASS before any pentesting is allowed."""
 
-import pytest
 from spider.sandbox.scope_guard import ScopeGuard
 
 

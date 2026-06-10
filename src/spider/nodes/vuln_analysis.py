@@ -51,4 +51,3 @@ class VulnerabilityAnalysisModule(dspy.Module):
                 web_findings=web_findings,
                 service_details=service_details,
             )
-

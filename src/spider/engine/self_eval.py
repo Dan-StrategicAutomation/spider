@@ -33,7 +33,7 @@ class SelfEvaluator(dspy.Module):
     def evaluate(self, goal: str, result: dspy.Prediction) -> float:
         """Evaluate the overall quality of a complete pentest result prediction."""
         # For a full result, we judge the aggregate output
-        return self.forward(goal=goal, node_type="overall", pred=result)
+        return self(goal=goal, node_type="overall", pred=result)
 
     def forward(self, goal: str, node_type: str, pred: dspy.Prediction) -> float:
         output_val = str(pred)

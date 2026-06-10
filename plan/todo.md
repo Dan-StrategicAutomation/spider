@@ -15,19 +15,19 @@ Each task includes the exact files to modify, acceptance criteria, and test comm
 
 ## P0 — Critical Bugs (Blocks Execution)
 
-- [ ] **Fix ReporterModule.__init__ signature**
+- [x] **Fix ReporterModule.__init__ signature**
   - File: `src/spider/nodes/reporter.py`
   - Change: Add `tools: list[dspy.Tool]` parameter (even if unused by ChainOfThought, needed for orchestrator compatibility)
   - Accept: `uv run python -c "from spider.nodes.reporter import ReporterModule; ReporterModule(tools=[])"` succeeds
   - Test: `uv run pytest tests/test_nodes/test_reporter.py -q`
 
-- [ ] **Fix ExecutorModule.__init__ signature**
+- [x] **Fix ExecutorModule.__init__ signature**
   - File: `src/spider/nodes/executor.py`
   - Change: Add `hitl_gate` parameter, store as `self.hitl_gate`
   - Accept: `uv run python -c "from spider.nodes.executor import ExecutorModule; ExecutorModule(tools=[], hitl_gate=None)"` succeeds
   - Test: `uv run pytest tests/test_nodes/test_executor.py -q`
 
-- [ ] **Fix ScopeGuard empty-scope logic**
+- [x] **Fix ScopeGuard empty-scope logic**
   - File: `src/spider/sandbox/scope_guard.py`
   - Change: When `allowed=[]` and `excluded=[]`, return `(False, "No targets authorized")` instead of `(True, "Unrestricted")`
   - Accept: `test_empty_scope_rejects_all` passes
@@ -67,17 +67,17 @@ Each task includes the exact files to modify, acceptance criteria, and test comm
   - Accept: `cve_intelligence()` returns identical output, intelligence modules are no longer orphaned
   - Test: `uv run pytest tests/test_tools/test_cve_intelligence.py -q`
 
-- [ ] **Remove dead code in attack_chain.py**
+- [x] **Remove dead code in attack_chain.py**
   - File: `src/spider/tools/attack_chain.py:43`
   - Change: Either assign the low-severity vulns list to `low_vulns` and use it, or remove the line
   - Accept: `uv run ruff check src/spider/tools/attack_chain.py` clean
 
-- [ ] **De-duplicate PLAN.md sections**
+- [x] **De-duplicate PLAN.md sections**
   - File: `PLAN.md`
   - Change: Remove the second copy of Section 13 (lines 625-660) and the dangling line 625
   - Accept: No duplicate section headings in PLAN.md
 
-- [ ] **Fix test file lint issues**
+- [x] **Fix test file lint issues**
   - File: `tests/test_safety/test_scope_guard.py`
   - Change: Remove unused `import pytest`, fix import sort order
   - Accept: `uv run ruff check tests/` clean

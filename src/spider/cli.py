@@ -15,7 +15,7 @@ from spider.observability import setup_observability
 from spider.sandbox.audit_logger import AuditLogger
 from spider.sandbox.hitl_gate import HITLGate
 from spider.sandbox.scope_guard import ScopeGuard
-from spider.schemas import validate_target_syntax
+from spider.schemas import ScanMode, validate_target_syntax
 
 # ── Colors ──────────────────────────────────────────────────────────────
 
@@ -174,10 +174,28 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
 # ── New Scan ────────────────────────────────────────────────────────────
 
 
-def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "recon"):
+def _build_goal(mode: ScanMode, target: str, custom_goal: str = "") -> str:
+    """Build the goal string for a given scan mode and target."""
+    if mode == ScanMode.CUSTOM:
+        return custom_goal
+    if mode == ScanMode.FULL:
+        return (
+            f"Perform a full penetration test against {target}. Discover vulnerabilities, "
+            "build attack chains, and exploit them with human approval. "
+            "Generate a complete report."
+        )
+    # RECON
+    return (
+        f"Perform comprehensive reconnaissance against {target}. Discover all "
+        "hosts, ports, services, and technologies. Identify the attack surface."
+    )
+
+
+def run_scan_noninteractive(session_db, orchestrator, target: str, mode: ScanMode):
     """Run a single scan non-interactively (used by --scan flag)."""
     divider("NEW SCAN")
     info(f"Target: {target}")
+    info(f"Mode: {mode.value}")
 
     # Check if target was scanned before
     past = session_db.find_by_target(target)
@@ -188,24 +206,13 @@ def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "
     session_id = session_db.create_session(target)
     success(f"Session created — ID {session_id}")
 
-    # Build goal from mode
-    if mode == "full":
-        goal = (
-            f"Perform a full penetration test against {target}. Discover vulnerabilities, "
-            "build attack chains, and exploit them with human approval. "
-            "Generate a complete report."
-        )
-    else:
-        goal = (
-            f"Perform comprehensive reconnaissance against {target}. Discover all "
-            "hosts, ports, services, and technologies. Identify the attack surface."
-        )
+    goal = _build_goal(mode, target)
 
     divider("SCANNING")
     info(f"Goal: {goal[:80]}...")
 
     try:
-        result = orchestrator.run(goal=goal, target=target)
+        result = orchestrator.run(goal=goal, target=target, mode=mode)
 
         # Check for orchestrator-level errors (e.g. scope)
         err = result.get("error") if isinstance(result, dict) else None
@@ -231,7 +238,7 @@ def run_scan_noninteractive(session_db, orchestrator, target: str, mode: str = "
         print(f"\n{BOLD}Session Results:{RESET}")
         if isinstance(result, dict):
             for key, val in result.items():
-                if key in ("session_id", "target", "goal", "topology"):
+                if key in ("session_id", "target", "goal", "topology", "mode"):
                     continue
                 print(f"  {CYAN}{key}{RESET}: {str(val)[:200]}")
         elif hasattr(result, "results"):
@@ -272,6 +279,7 @@ def new_scan(session_db, orchestrator):
             if not confirm("Authorize this scan interactively for this session?"):
                 info("Scan cancelled.")
                 return
+            orchestrator.scope_guard.add_temp_authorization(target)
             success(f"Target {target!r} authorized interactively.")
 
     # Create session
@@ -280,32 +288,32 @@ def new_scan(session_db, orchestrator):
 
     # Set scan mode
     divider("SCAN MODE")
-    print("  [1] Recon only (safe, autonomous)")
-    print("  [2] Full pentest (includes HITL-gated exploitation)")
-    print("  [3] Custom goal (natural language)")
+    print(f"  {GREEN}[1]{RESET} Recon only (safe, autonomous)")
+    print(f"  {GREEN}[2]{RESET} Full pentest (includes HITL-gated exploitation)")
+    print(f"  {GREEN}[3]{RESET} Custom goal (natural language)")
     divider()
-    mode = prompt("Mode: ")
+    mode_choice = prompt("Mode: ")
 
-    if mode == "3":
+    if mode_choice == "3":
+        mode = ScanMode.CUSTOM
         goal = prompt("Your goal: ")
-    elif mode == "1":
-        goal = (
-            f"Perform comprehensive reconnaissance against {target}. Discover all "
-            "hosts, ports, services, and technologies. Identify the attack surface."
-        )
+        if not goal:
+            warn("No goal provided. Cancelling.")
+            return
+    elif mode_choice == "2":
+        mode = ScanMode.FULL
+        goal = _build_goal(mode, target)
     else:
-        goal = (
-            f"Perform a full penetration test against {target}. Discover vulnerabilities, "
-            "build attack chains, and exploit them with human approval. "
-            "Generate a complete report."
-        )
+        mode = ScanMode.RECON
+        goal = _build_goal(mode, target)
 
     divider("SCANNING")
     info(f"Target: {target}")
+    info(f"Mode: {mode.value}")
     info(f"Goal: {goal[:80]}...")
 
     try:
-        result = orchestrator.run(goal=goal, target=target)
+        result = orchestrator.run(goal=goal, target=target, mode=mode)
 
         # Check for orchestrator-level errors (e.g. scope)
         err = result.get("error") if isinstance(result, dict) else None
@@ -343,7 +351,6 @@ def show_findings(result):
     """Display pentest findings in a nice format."""
     divider("FINDINGS")
 
-    # This will show actual parsed results when nodes are implemented
     info("Scan results:")
     print(f"\n{BOLD}Session Results:{RESET}")
     if hasattr(result, "results"):
@@ -587,15 +594,27 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["recon", "full"],
+        choices=["recon", "full", "custom"],
         default="recon",
-        help="Scan mode (default: recon)",
+        help="Scan mode: recon (default), full, or custom",
+    )
+    parser.add_argument(
+        "--goal",
+        metavar="GOAL",
+        default="",
+        help="Natural language goal (required when --mode=custom)",
     )
     args = parser.parse_args()
 
     session_db = SessionDB()
 
     if args.scan:
+        mode = ScanMode(args.mode)
+
+        if mode == ScanMode.CUSTOM and not args.goal:
+            print(f"{RED}[✗] --goal is required when --mode=custom{RESET}")
+            sys.exit(1)
+
         # Single-scan mode (non-interactive)
         banner()
         print(f"  {DIM}Initializing...{RESET}")
@@ -604,7 +623,7 @@ def main():
         except Exception as e:
             error(f"Failed to initialize: {e}")
             sys.exit(1)
-        run_scan_noninteractive(session_db, orchestrator, target=args.scan, mode=args.mode)
+        run_scan_noninteractive(session_db, orchestrator, target=args.scan, mode=mode)
         return
 
     banner()

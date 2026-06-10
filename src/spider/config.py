@@ -22,9 +22,7 @@ class SpiderConfig(BaseSettings):
 
     # ── LLM Configuration ──────────────────────────────────────────────
 
-    @field_validator(
-        "excluded_targets", "allowed_targets", "lab_targets", mode="before"
-    )
+    @field_validator("excluded_targets", "allowed_targets", "lab_targets", mode="before")
     @classmethod
     def split_csv(cls, v: Any) -> Any:
         """Split comma-separated strings into lists, bypassing strict JSON parsing."""
@@ -132,4 +130,3 @@ class SpiderConfig(BaseSettings):
     langfuse_public_key: str = Field(default="")
     langfuse_secret_key: str = Field(default="")
     langfuse_base_url: str = Field(default="https://cloud.langfuse.com")
-

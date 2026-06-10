@@ -16,9 +16,10 @@ class ScopeGuard:
         excluded: list[str],
         lab_network: str | None = None,
     ):
-        self._allowed_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        self._allowed_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network | str] = []
         self._excluded: set[str] = set(excluded)
         self._lab_network: ipaddress.IPv4Network | None = None
+        self._temp_authorized: set[str] = set()  # Interactive authorization for CLI
 
         for cidr in allowed:
             try:
@@ -38,6 +39,10 @@ class ScopeGuard:
 
         Returns (authorized, reason).
         """
+        # Check temporary authorizations first
+        if target in self._temp_authorized:
+            return True, "Temporarily authorized"
+
         # 1. Check excluded list
         if any(fnmatch.fnmatch(target, exc) for exc in self._excluded):
             return False, f"Target {target!r} is in the excluded list"
@@ -72,6 +77,10 @@ class ScopeGuard:
                     pass
 
         return False, f"Target {target!r} is not within any allowed scope"
+
+    def add_temp_authorization(self, target: str) -> None:
+        """Add a target to temporary authorization (for interactive CLI use)."""
+        self._temp_authorized.add(target)
 
     def is_lab_target(self, target: str) -> bool:
         """Check if target is in the safe test lab network."""

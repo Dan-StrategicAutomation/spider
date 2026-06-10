@@ -5,11 +5,7 @@ and graceful handling of missing libraries / connection errors.
 """
 
 import json
-import socket
 from unittest.mock import MagicMock, patch
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # dns_enum
@@ -27,7 +23,7 @@ class TestDnsEnum:
         def fake_resolve(domain, rtype):
             if rtype in record_map:
                 answers = [MagicMock() for _ in record_map[rtype]]
-                for ans, text in zip(answers, record_map[rtype]):
+                for ans, text in zip(answers, record_map[rtype], strict=False):
                     ans.to_text.return_value = text
                 return answers
             raise dns.resolver.NoAnswer()
