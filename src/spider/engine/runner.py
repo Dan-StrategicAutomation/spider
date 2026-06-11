@@ -10,7 +10,7 @@ from typing import Any
 
 import dspy
 
-from spider.schemas import GraphTopology
+from spider.schemas import ExecutionConstraints, GraphTopology, PentestGoal, ScanMode, TargetSpec
 
 
 class GraphRunner(dspy.Module):
@@ -20,16 +20,67 @@ class GraphRunner(dspy.Module):
         self,
         topology: GraphTopology,
         node_modules: dict[str, dspy.Module],
-        goal: str = "",
+        goal: str | PentestGoal = "",
         **kwargs,
     ):
         super().__init__()
         self.topology = topology
         self.node_modules = node_modules
-        self.goal = goal
+        self.goal = self._normalize_goal(goal)
         self.progress_fn = kwargs.pop("progress_fn", lambda _s, _d="": None)
-        # Store initial inputs (target, etc.) for root nodes
-        self._initial_inputs = {k: v for k, v in kwargs.items() if k != "progress_fn"}
+        # Store normalized initial inputs (target_spec, constraints, etc.) for root nodes.
+        self._initial_inputs = self._normalize_runtime_inputs(kwargs)
+
+    @staticmethod
+    def _normalize_goal(goal: str | PentestGoal) -> PentestGoal:
+        """Convert legacy goal text into the shared PentestGoal model."""
+        if isinstance(goal, PentestGoal):
+            return goal
+        if goal:
+            return PentestGoal.from_text(goal)
+        return PentestGoal(objective="Execute pentest topology")
+
+    def _normalize_runtime_inputs(self, inputs: dict[str, Any]) -> dict[str, Any]:
+        """Normalize runtime control inputs to shared Pydantic models."""
+        normalized = dict(inputs)
+        normalized["goal"] = self.goal
+
+        if "target_spec" in normalized:
+            target_spec = normalized["target_spec"]
+            if isinstance(target_spec, str):
+                target_spec = TargetSpec.from_raw(target_spec)
+        elif "target" in normalized:
+            target_value = normalized["target"]
+            if isinstance(target_value, TargetSpec):
+                target_spec = target_value
+            else:
+                target_spec = TargetSpec.from_raw(str(target_value))
+        else:
+            target_spec = None
+
+        if target_spec is not None:
+            normalized["target_spec"] = target_spec
+            if "target" in normalized:
+                normalized["target"] = target_spec
+
+        if "constraints" in normalized:
+            constraints = normalized["constraints"]
+            if isinstance(constraints, str):
+                normalized["constraints"] = ExecutionConstraints.from_text(constraints)
+        elif "constraints_text" in normalized:
+            constraints_text = normalized["constraints_text"]
+            if isinstance(constraints_text, ExecutionConstraints):
+                constraints = constraints_text
+            else:
+                constraints = ExecutionConstraints.from_text(str(constraints_text))
+            normalized["constraints"] = constraints
+            normalized["constraints_text"] = constraints
+        elif "mode" in normalized:
+            mode = normalized["mode"]
+            scan_mode = ScanMode(mode) if isinstance(mode, str) else mode
+            normalized["constraints"] = ExecutionConstraints(scan_mode=scan_mode)
+
+        return normalized
 
     def _get_signature_fields(self, module: dspy.Module) -> tuple[dict[str, Any], list[str]]:
         """Extract InputField and OutputField info from a DSPy module's signature.
@@ -169,7 +220,10 @@ class GraphRunner(dspy.Module):
     async def forward_async(self, **kwargs) -> dspy.Prediction:
         waves = self.topology.topological_waves()
         # Merge initial inputs (target, etc.) with any additional kwargs
-        all_results: dict[str, Any] = {**self._initial_inputs, **kwargs}
+        all_results: dict[str, Any] = {
+            **self._initial_inputs,
+            **self._normalize_runtime_inputs(kwargs),
+        }
 
         for wave in waves:
             # Map IDs to human names for cleaner logging

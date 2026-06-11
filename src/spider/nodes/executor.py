@@ -8,7 +8,7 @@ from typing import Any
 
 import dspy
 
-from spider.schemas import AttackPlan, ExploitResult
+from spider.schemas import AttackPlan, ExploitResult, TargetSpec
 
 
 class ExecutorSignature(dspy.Signature):
@@ -17,7 +17,7 @@ class ExecutorSignature(dspy.Signature):
     exploitation tools (sqlmap, hydra, metasploit) to gain access."""
 
     attack_plan: AttackPlan = dspy.InputField()
-    target: str = dspy.InputField()
+    target_spec: TargetSpec = dspy.InputField()
     exploit_result: ExploitResult = dspy.OutputField()
 
 
@@ -62,6 +62,6 @@ class ExecutorModule(dspy.Module):
         else:
             self.agent = base
 
-    def forward(self, attack_plan: AttackPlan, target: str) -> dspy.Prediction:
+    def forward(self, attack_plan: AttackPlan, target_spec: TargetSpec) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):
-            return self.agent(attack_plan=attack_plan, target=target)
+            return self.agent(attack_plan=attack_plan, target_spec=target_spec)

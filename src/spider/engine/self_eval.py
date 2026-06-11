@@ -5,7 +5,7 @@ Used as reward functions for dspy.Refine on each node type.
 
 import dspy
 
-from spider.schemas import QualityScore
+from spider.schemas import EvaluationContext, PentestGoal, QualityScore
 
 
 class SelfEvalSignature(dspy.Signature):
@@ -15,11 +15,7 @@ class SelfEvalSignature(dspy.Signature):
     - Is there sufficient evidence/detail to support claims?
     - Would a human pentester consider this result useful?"""
 
-    goal: str = dspy.InputField()
-    node_type: str = dspy.InputField(
-        desc="Type of pentest node: recon, vuln_analysis, exploit_plan, report"
-    )
-    output: str = dspy.InputField()
+    evaluation_context: EvaluationContext = dspy.InputField()
     evaluation: QualityScore = dspy.OutputField()
 
 
@@ -30,15 +26,20 @@ class SelfEvaluator(dspy.Module):
         super().__init__()
         self.judge = dspy.ChainOfThought(SelfEvalSignature)
 
-    def evaluate(self, goal: str, result: dspy.Prediction) -> float:
+    def evaluate(self, goal: PentestGoal, result: dspy.Prediction) -> float:
         """Evaluate the overall quality of a complete pentest result prediction."""
-        # For a full result, we judge the aggregate output
-        return self(goal=goal, node_type="overall", pred=result)
+        # For a full result, we judge the aggregate output.
+        return self(
+            evaluation_context=EvaluationContext(
+                goal=goal,
+                node_type="overall",
+                output_snapshot=str(result),
+            )
+        )
 
-    def forward(self, goal: str, node_type: str, pred: dspy.Prediction) -> float:
-        output_val = str(pred)
+    def forward(self, evaluation_context: EvaluationContext) -> float:
         try:
-            result = self.judge(goal=goal, node_type=node_type, output=output_val)
+            result = self.judge(evaluation_context=evaluation_context)
             # Use the wrap helper to handle cases where result.evaluation might
             # be a float or a dict instead of the QualityScore model
             eval_obj = QualityScore.wrap(getattr(result, "evaluation", 0.0))

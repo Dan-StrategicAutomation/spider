@@ -42,6 +42,106 @@ RECON_OUTPUTS: frozenset[str] = frozenset(
 )
 
 
+# ── Shared Runtime Control Schemas ───────────────────────────────────────────
+
+
+class TargetSpec(BaseModel):
+    """Authorized target descriptor passed to DSPy control signatures."""
+
+    target: str = Field(..., description="IP address, hostname, URL, or CIDR target in scope")
+    target_type: str = Field(
+        default="host", description="Target kind, such as host, url, cidr, or lab"
+    )
+    scope: str = Field(
+        default="", description="Scope statement or engagement boundary for this target"
+    )
+    notes: str = Field(
+        default="", description="Human-readable target context that is not control data"
+    )
+
+    @field_validator("target")
+    @classmethod
+    def validate_target(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("TargetSpec.target must not be empty")
+        return stripped
+
+    @classmethod
+    def from_raw(cls, target: str, scope: str = "", notes: str = "") -> "TargetSpec":
+        """Build a TargetSpec from a legacy raw target string."""
+        target_type = "host"
+        if "://" in target:
+            target_type = "url"
+        elif "/" in target:
+            target_type = "cidr"
+        return cls(target=target, target_type=target_type, scope=scope, notes=notes)
+
+
+class PentestGoal(BaseModel):
+    """Structured pentest objective and success criteria."""
+
+    objective: str = Field(..., description="Primary authorized testing objective")
+    success_criteria: list[str] = Field(default_factory=list)
+    authorized_activities: list[str] = Field(default_factory=list)
+    notes: str = Field(default="", description="Free-form goal notes for human context")
+
+    @field_validator("objective")
+    @classmethod
+    def validate_objective(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("PentestGoal.objective must not be empty")
+        return stripped
+
+    @classmethod
+    def from_text(cls, objective: str) -> "PentestGoal":
+        """Build a PentestGoal from a legacy objective string."""
+        return cls(objective=objective)
+
+
+class ExecutionConstraints(BaseModel):
+    """Rules of engagement and runtime safety constraints for DSPy control flow."""
+
+    rules_of_engagement: str = Field(default="", description="Authorized rules of engagement")
+    scan_mode: ScanMode = ScanMode.RECON
+    require_hitl_for_exploitation: bool = True
+    sandbox_only: bool = True
+    max_graph_nodes: int | None = None
+    notes: str = Field(default="", description="Free-form constraint notes for human context")
+
+    @classmethod
+    def from_text(
+        cls,
+        rules_of_engagement: str,
+        scan_mode: ScanMode | str = ScanMode.RECON,
+        max_graph_nodes: int | None = None,
+    ) -> "ExecutionConstraints":
+        """Build ExecutionConstraints from legacy rules text."""
+        mode = ScanMode(scan_mode) if isinstance(scan_mode, str) else scan_mode
+        return cls(
+            rules_of_engagement=rules_of_engagement,
+            scan_mode=mode,
+            max_graph_nodes=max_graph_nodes,
+        )
+
+
+class EvaluationContext(BaseModel):
+    """Structured context for quality evaluation of a node or full run."""
+
+    goal: PentestGoal
+    node_type: str = Field(default="overall")
+    output_snapshot: str = Field(default="", description="Free-form serialized result being judged")
+
+    @field_validator("node_type")
+    @classmethod
+    def validate_node_type(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            return "overall"
+        return stripped
+
+
 # ── Recon Schemas ────────────────────────────────────────────────────────────
 
 

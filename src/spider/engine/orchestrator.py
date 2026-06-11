@@ -19,7 +19,7 @@ from spider.engine.tool_registry import build_tool_catalog, build_tools
 from spider.engine.weaver import GraphTopology, GraphWeaver
 from spider.sandbox.hitl_gate import HITLGate
 from spider.sandbox.scope_guard import ScopeGuard
-from spider.schemas import ScanMode
+from spider.schemas import ExecutionConstraints, PentestGoal, ScanMode, TargetSpec
 from spider.tui.session import SessionStore
 
 
@@ -112,8 +112,8 @@ class SpiderOrchestrator:
 
     def run(
         self,
-        goal: str,
-        target: str,
+        goal: str | PentestGoal,
+        target: str | TargetSpec,
         **kwargs: Any,
     ) -> dict[str, object]:
         """Execute a full pentest against the given target.
@@ -130,16 +130,30 @@ class SpiderOrchestrator:
         if isinstance(mode, str):
             mode = ScanMode(mode)
         session_id = f"run_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        goal_spec = goal if isinstance(goal, PentestGoal) else PentestGoal.from_text(goal)
+        target_spec = (
+            target
+            if isinstance(target, TargetSpec)
+            else TargetSpec.from_raw(
+                target=target,
+                scope=self.config.rules_of_engagement,
+            )
+        )
+        constraints = ExecutionConstraints.from_text(
+            rules_of_engagement=self.config.rules_of_engagement,
+            scan_mode=mode,
+            max_graph_nodes=self.config.max_graph_nodes,
+        )
 
         # Phase 0: Scope Check
         if self.scope_guard:
-            authorized, reason = self.scope_guard.authorize(target, "orchestrator_run")
+            authorized, reason = self.scope_guard.authorize(target_spec.target, "orchestrator_run")
             if not authorized:
                 return {
                     "success": False,
                     "error": f"OUT_OF_SCOPE: {reason}",
                     "session_id": session_id,
-                    "target": target,
+                    "target": target_spec.target,
                 }
 
         # Phase 1: Weave topology from goal and target
@@ -152,9 +166,9 @@ class SpiderOrchestrator:
         tool_catalog = build_tool_catalog(set(tools.keys()), mode)
         with dspy.settings.context(temperature=0.1):
             prediction = self.weaver(
-                goal=goal,
-                target_info=target,
-                constraints_text=self.config.rules_of_engagement,
+                goal=goal_spec,
+                target_spec=target_spec,
+                constraints=constraints,
                 tool_catalog=tool_catalog,
                 progress_fn=self.progress_fn,
             )
@@ -179,8 +193,8 @@ class SpiderOrchestrator:
         runner = GraphRunner(
             topology=topology,
             node_modules=node_modules,
-            goal=goal,
-            target=target,
+            goal=goal_spec,
+            target_spec=target_spec,
             tools=tools,
             progress_fn=self.progress_fn,
         )
@@ -190,8 +204,8 @@ class SpiderOrchestrator:
         # Phase 5: Quality evaluation + auto-healing loop
         self.progress_fn("evaluate", "Evaluating output quality...")
         healed = self._heal_loop(
-            goal=goal,
-            target=target,
+            goal=goal_spec,
+            target=target_spec,
             topology=topology,
             node_modules=node_modules,
             tools=tools,
@@ -203,8 +217,8 @@ class SpiderOrchestrator:
 
         return {
             "session_id": session_id,
-            "target": target,
-            "goal": goal,
+            "target": target_spec.target,
+            "goal": goal_spec.objective,
             "mode": mode.value,
             "topology": topology,
             "result": healed,
@@ -212,8 +226,8 @@ class SpiderOrchestrator:
 
     def _heal_loop(
         self,
-        goal: str,
-        target: str,
+        goal: PentestGoal,
+        target: TargetSpec,
         topology: GraphTopology,
         node_modules: dict[str, dspy.Module],
         tools: dict[str, dspy.Tool],
@@ -269,8 +283,12 @@ class SpiderOrchestrator:
                 tool_catalog = build_tool_catalog(set(tools.keys()), mode)
                 new_prediction = self.weaver(
                     goal=goal,
-                    target_info=target,
-                    constraints_text=self.config.rules_of_engagement,
+                    target_spec=target,
+                    constraints=ExecutionConstraints.from_text(
+                        rules_of_engagement=self.config.rules_of_engagement,
+                        scan_mode=mode,
+                        max_graph_nodes=self.config.max_graph_nodes,
+                    ),
                     tool_catalog=tool_catalog,
                     previous_result=str(current_result),
                     feedback=feedback,
@@ -282,7 +300,7 @@ class SpiderOrchestrator:
                     topology=new_topology,
                     node_modules=new_modules,
                     goal=goal,
-                    target=target,
+                    target_spec=target,
                     tools=tools,
                     progress_fn=self.progress_fn,
                 )
