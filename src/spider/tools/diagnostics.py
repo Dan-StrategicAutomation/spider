@@ -1,8 +1,9 @@
 """Diagnostics utility to check for required security binaries in the PATH."""
 
 import shutil
-import subprocess
 from typing import NamedTuple
+
+from spider.tools.execution import ToolExecutionBackend, get_default_execution_backend
 
 
 class ToolCheck(NamedTuple):
@@ -26,7 +27,7 @@ REQUIRED_TOOLS = [
 ]
 
 
-def check_environment() -> list[dict]:
+def check_environment(backend: ToolExecutionBackend | None = None) -> list[dict]:
     """Check if required binaries are available in the system PATH.
 
     Returns a list of status dictionaries.
@@ -48,9 +49,8 @@ def check_environment() -> list[dict]:
             try:
                 # Most tools support --version or -h
                 v_arg = "-v" if tool.name == "nikto" else "--version"
-                proc = subprocess.run(
-                    [tool.binary, v_arg], capture_output=True, text=True, timeout=2
-                )
+                executor = backend or get_default_execution_backend()
+                proc = executor.execute([tool.binary, v_arg], timeout=2)
                 stdout_first = proc.stdout.split("\n")[0].strip()
                 stderr_first = proc.stderr.split("\n")[0].strip()
                 status["version"] = stdout_first or stderr_first

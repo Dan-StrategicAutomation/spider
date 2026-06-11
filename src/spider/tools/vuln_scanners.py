@@ -1,14 +1,20 @@
 """Vulnerability scanners -- nuclei, nmap NSE, trivy."""
 
 import json
-import subprocess
 from typing import Any
+
+from spider.tools.execution import (
+    ToolExecutionBackend,
+    ToolExecutionTimeoutError,
+    get_default_execution_backend,
+)
 
 
 def nuclei_scan(
     target: str,
     templates: str = "",
     severity: str = "",
+    backend: ToolExecutionBackend | None = None,
     **kwargs,
 ) -> str:
     """Run nuclei vulnerability scan.
@@ -23,12 +29,8 @@ def nuclei_scan(
         cmd.extend(["-t", templates])
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
+        executor = backend or get_default_execution_backend()
+        result = executor.execute(cmd, timeout=300)
         findings: list[dict[str, Any]] = []
         for line in result.stdout.strip().split("\n"):
             if line.strip():
@@ -43,14 +45,7 @@ def nuclei_scan(
                 "total": len(findings),
             }
         )
-    except FileNotFoundError:
-        return json.dumps(
-            {
-                "success": False,
-                "error": "nuclei not found in PATH",
-            }
-        )
-    except subprocess.TimeoutExpired:
+    except ToolExecutionTimeoutError:
         return json.dumps(
             {
                 "success": False,
@@ -66,7 +61,12 @@ def nuclei_scan(
         )
 
 
-def nmap_nse(target: str, scripts: str = "vuln,exploit", **kwargs) -> str:
+def nmap_nse(
+    target: str,
+    scripts: str = "vuln,exploit",
+    backend: ToolExecutionBackend | None = None,
+    **kwargs,
+) -> str:
     """Run nmap NSE scripts for vulnerability detection and default
     credential checks."""
     cmd = [
@@ -79,12 +79,8 @@ def nmap_nse(target: str, scripts: str = "vuln,exploit", **kwargs) -> str:
         target,
     ]
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
+        executor = backend or get_default_execution_backend()
+        result = executor.execute(cmd, timeout=600)
         return json.dumps(
             {
                 "success": True,
@@ -92,14 +88,7 @@ def nmap_nse(target: str, scripts: str = "vuln,exploit", **kwargs) -> str:
                 "errors": result.stderr,
             }
         )
-    except FileNotFoundError:
-        return json.dumps(
-            {
-                "success": False,
-                "error": "nmap not found in PATH",
-            }
-        )
-    except subprocess.TimeoutExpired:
+    except ToolExecutionTimeoutError:
         return json.dumps(
             {
                 "success": False,
@@ -115,7 +104,12 @@ def nmap_nse(target: str, scripts: str = "vuln,exploit", **kwargs) -> str:
         )
 
 
-def trivy_scan(target: str, scan_type: str = "image", **kwargs) -> str:
+def trivy_scan(
+    target: str,
+    scan_type: str = "image",
+    backend: ToolExecutionBackend | None = None,
+    **kwargs,
+) -> str:
     """Run trivy vulnerability scanner for container images and filesystems."""
     cmd = [
         "trivy",
@@ -126,12 +120,8 @@ def trivy_scan(target: str, scan_type: str = "image", **kwargs) -> str:
         target,
     ]
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
+        executor = backend or get_default_execution_backend()
+        result = executor.execute(cmd, timeout=300)
         try:
             data = json.loads(result.stdout)
             return json.dumps(
@@ -150,14 +140,7 @@ def trivy_scan(target: str, scan_type: str = "image", **kwargs) -> str:
                     "output": result.stdout,
                 }
             )
-    except FileNotFoundError:
-        return json.dumps(
-            {
-                "success": False,
-                "error": "trivy not found in PATH",
-            }
-        )
-    except subprocess.TimeoutExpired:
+    except ToolExecutionTimeoutError:
         return json.dumps(
             {
                 "success": False,

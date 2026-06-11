@@ -5,15 +5,20 @@ This ensures no tool can run out-of-scope or without being logged.
 """
 
 import functools
+import inspect
 import json
 import shutil
-import subprocess
 from collections.abc import Callable
 from typing import Any
 
 import dspy
 
 from spider.sandbox.hitl_gate import HITLGate
+from spider.tools.execution import (
+    ToolExecutionBackend,
+    ToolExecutionTimeoutError,
+    get_default_execution_backend,
+)
 
 
 def _audit_log(
@@ -39,7 +44,7 @@ def _audit_log(
 
 def _execution_params(kwargs: dict[str, Any]) -> dict[str, Any]:
     """Return non-target kwargs suitable for audit metadata."""
-    return {k: v for k, v in kwargs.items() if k != "target"}
+    return {k: v for k, v in kwargs.items() if k not in {"target", "backend"}}
 
 
 def _sanitize_args(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -73,6 +78,7 @@ def make_tool(
     hitl_gate: HITLGate | None = None,
     hitl_required: bool = False,
     risk_level: str = "high",
+    execution_backend: ToolExecutionBackend | None = None,
 ) -> dspy.Tool | None:
     """Wrap a tool function with scope checking, audit logging, and timeout.
 
@@ -174,9 +180,11 @@ def make_tool(
 
         # 4. Execute with timeout
         try:
+            if "backend" in func.__code__.co_varnames and "backend" not in kwargs:
+                kwargs["backend"] = execution_backend or get_default_execution_backend()
             result = func(*args, **kwargs)
             phase = "completed"
-        except subprocess.TimeoutExpired:
+        except ToolExecutionTimeoutError:
             result = json.dumps({"error": "TIMEOUT", "limit": timeout})
             phase = "timeout"
         except Exception as e:
@@ -194,6 +202,13 @@ def make_tool(
 
         return result
 
+    signature = inspect.signature(func)
+    wrapped.__signature__ = signature.replace(
+        parameters=[
+            parameter for parameter in signature.parameters.values() if parameter.name != "backend"
+        ]
+    )
+
     return dspy.Tool(wrapped)
 
 
@@ -205,6 +220,7 @@ def make_tool_from_cmd(
     audit_logger=None,
     timeout: int = 300,
     required_binary: str | None = None,
+    execution_backend: ToolExecutionBackend | None = None,
 ) -> dspy.Tool | None:
     """Create a dspy.Tool from a CLI command template.
 
@@ -262,17 +278,18 @@ def make_tool_from_cmd(
 
         # 4. Execution
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            backend = execution_backend or get_default_execution_backend()
+            result = backend.execute(cmd, timeout=timeout)
             output = json.dumps(
                 {
-                    "success": result.returncode == 0,
+                    "success": result.exit_code == 0,
                     "stdout": result.stdout[:10000],
                     "stderr": result.stderr[:2000],
-                    "exit_code": result.returncode,
+                    "exit_code": result.exit_code,
                 }
             )
-            phase = "completed" if result.returncode == 0 else "error"
-        except subprocess.TimeoutExpired:
+            phase = "completed" if result.exit_code == 0 else "error"
+        except ToolExecutionTimeoutError:
             output = json.dumps({"error": "TIMEOUT", "limit": timeout})
             phase = "timeout"
         except Exception as e:

@@ -4,26 +4,29 @@ All functions return JSON strings for DSPy compatibility.
 """
 
 import json
-import subprocess
+
+from spider.tools.execution import ToolExecutionBackend, get_default_execution_backend
 
 
 def gobuster_scan(
     target: str,
     mode: str = "dir",
     wordlist: str = "/usr/share/wordlists/dirb/common.txt",
+    backend: ToolExecutionBackend | None = None,
     **kwargs,
 ) -> str:
     """Directory and file brute-forcing against web targets.
     Supports dir, dns, and vhost modes. Default uses common wordlist."""
     url = target if target.startswith("http") else f"http://{target}"
     cmd = ["gobuster", mode, "-u", url, "-w", wordlist, "-q"]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    executor = backend or get_default_execution_backend()
+    result = executor.execute(cmd, timeout=600)
     return json.dumps(
         {
-            "success": result.returncode == 0,
+            "success": result.exit_code == 0,
             "output": result.stdout[:20000],
             "errors": result.stderr[:2000],
-            "exit_code": result.returncode,
+            "exit_code": result.exit_code,
         }
     )
 
@@ -32,6 +35,7 @@ def ffuf_scan(
     target: str,
     wordlist: str = "/usr/share/wordlists/dirb/common.txt",
     extensions: str = "php,html,txt",
+    backend: ToolExecutionBackend | None = None,
     **kwargs,
 ) -> str:
     """Fast web fuzzer for discovering hidden endpoints, parameters, and virtual
@@ -51,44 +55,55 @@ def ffuf_scan(
         "-of",
         "json",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    executor = backend or get_default_execution_backend()
+    result = executor.execute(cmd, timeout=600)
     return json.dumps(
         {
-            "success": result.returncode == 0,
+            "success": result.exit_code == 0,
             "output": result.stdout[:20000],
             "errors": result.stderr[:2000],
-            "exit_code": result.returncode,
+            "exit_code": result.exit_code,
         }
     )
 
 
-def nikto_scan(target: str, **kwargs) -> str:
+def nikto_scan(
+    target: str,
+    backend: ToolExecutionBackend | None = None,
+    **kwargs,
+) -> str:
     """Web server vulnerability scanner. Checks for outdated software,
     dangerous files, configuration issues, and known vulnerabilities"""
     host = target if target.startswith("http") else f"http://{target}"
     cmd = ["nikto", "-host", host, "-Format", "json", "-Tuning", "123456"]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    executor = backend or get_default_execution_backend()
+    result = executor.execute(cmd, timeout=600)
     return json.dumps(
         {
-            "success": result.returncode == 0,
+            "success": result.exit_code == 0,
             "output": result.stdout[:20000],
             "errors": result.stderr[:2000],
-            "exit_code": result.returncode,
+            "exit_code": result.exit_code,
         }
     )
 
 
-def enum4linux(target: str, **kwargs) -> str:
+def enum4linux(
+    target: str,
+    backend: ToolExecutionBackend | None = None,
+    **kwargs,
+) -> str:
     """Windows/SMB enumeration -- users, shares, group memberships,
     password policies"""
     cmd = ["enum4linux", "-a", target]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    executor = backend or get_default_execution_backend()
+    result = executor.execute(cmd, timeout=300)
     return json.dumps(
         {
-            "success": result.returncode == 0,
+            "success": result.exit_code == 0,
             "output": result.stdout[:20000],
             "errors": result.stderr[:2000],
-            "exit_code": result.returncode,
+            "exit_code": result.exit_code,
         }
     )
 
