@@ -3,8 +3,10 @@ Verifies that GraphTopology correctly calculates waves based on NodeDef.depends_
 """
 
 import pytest
+from pydantic import ValidationError
 
-from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
+from spider.engine.weaver import build_default_topology, validate_topology_contract
+from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole, ScanMode
 
 
 def test_topological_waves_follows_depends_on():
@@ -16,7 +18,7 @@ def test_topological_waves_follows_depends_on():
             role=NodeRole.REACT,
             name="Recon",
             description="Recon node",
-            output="recon_results",
+            output="recon_output",
             depends_on=[],
         ),
         NodeDef(
@@ -25,7 +27,7 @@ def test_topological_waves_follows_depends_on():
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Vuln",
             description="Vuln node",
-            output="vulnerabilities",
+            output="vuln_output",
             depends_on=["recon"],  # Explicit dependency
         ),
     ]
@@ -144,3 +146,43 @@ def test_orphan_handling():
     topo = GraphTopology(name="orphan", objective="orphan", nodes=nodes, edges=[])
     waves = topo.topological_waves()
     assert waves == [["A"]]
+
+
+def test_topology_contract_rejects_missing_runtime_and_node_inputs():
+    """Malformed LLM topologies should be rejected before runner execution."""
+    nodes = [
+        NodeDef(
+            id="target_reconnaissance",
+            kind=NodeKind.RECON,
+            role=NodeRole.REACT,
+            name="Target Reconnaissance",
+            description="Discover target services.",
+            output="recon_results",
+            depends_on=[],
+        ),
+        NodeDef(
+            id="final_reporting",
+            kind=NodeKind.REPORTING,
+            role=NodeRole.CHAIN_OF_THOUGHT,
+            name="Final Reporting",
+            description="Generate a final report.",
+            output="report",
+            depends_on=[],
+        ),
+    ]
+    with pytest.raises(ValidationError, match="runtime_inputs must include 'target_spec'"):
+        GraphTopology(
+            name="bad_llm_topology",
+            objective="Bad topology from model",
+            nodes=nodes,
+            edges=[],
+            runtime_inputs=[],
+        )
+
+
+def test_default_recon_topology_satisfies_contract():
+    """Default recon topology should pass deterministic data-flow validation."""
+    topo = build_default_topology(ScanMode.RECON)
+
+    assert topo is not None
+    assert validate_topology_contract(topo, ScanMode.RECON) == []

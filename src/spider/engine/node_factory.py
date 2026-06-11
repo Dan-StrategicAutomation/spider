@@ -173,8 +173,10 @@ def _select_tools_for_node(
     entry: RegistryEntry,
     all_tools: dict[str, dspy.Tool],
 ) -> list[dspy.Tool]:
-    """Select declared tools for a node after category validation."""
-    return [all_tools[tool.name] for tool in node.tools if tool.name in entry.allowed_tools]
+    """Select declared tools, or all available kind-allowed tools when omitted."""
+    requested = {tool.name for tool in node.tools}
+    selected_names = requested or (entry.allowed_tools & set(all_tools))
+    return [all_tools[name] for name in sorted(selected_names) if name in entry.allowed_tools]
 
 
 def _scan_mode_from_topology(topology: GraphTopology) -> ScanMode | None:

@@ -7,6 +7,8 @@ nodes have their inputs satisfiable. No-op for FULL and CUSTOM.
 
 from spider.schemas import RECON_OUTPUTS, GraphTopology, ScanMode
 
+_RECON_RUNTIME_INPUTS = frozenset({"target", "target_spec"})
+
 
 class UnsatisfiableInputError(ValueError):
     """Raised when a node's inputs cannot be satisfied after filtering."""
@@ -34,26 +36,27 @@ def filter_topology_for_mode(topology: GraphTopology, mode: ScanMode) -> GraphTo
             allowed_outputs.add(node.output.lower())
             filtered_nodes.append(node)
 
+    runtime_inputs = set(topology.runtime_inputs) | _RECON_RUNTIME_INPUTS
+
     # Rebuild depends_on to exclude removed nodes
     for node in filtered_nodes:
         node.depends_on = [d for d in node.depends_on if d in allowed_ids]
-        node.inputs = [i for i in node.inputs if i.lower() in RECON_OUTPUTS or i == "target"]
+        node.inputs = [
+            i
+            for i in node.inputs
+            if i.lower() in RECON_OUTPUTS or i in runtime_inputs
+        ]
 
     # Validate that each remaining node's inputs can be satisfied
-    runtime_inputs = set(topology.runtime_inputs) if topology.runtime_inputs else set()
     for node in filtered_nodes:
         for inp in node.inputs:
             inp_lower = inp.lower()
-            # Input must be either: target (runtime), or produced by another allowed node
-            if (
-                inp_lower not in allowed_outputs
-                and inp_lower not in runtime_inputs
-                and inp != "target"
-            ):
-                # Don't filter out - just warn, but fix the inputs list
-                # Remove unsatisfiable inputs from the node definition
+            # Input must be either a declared runtime input or produced by an allowed node.
+            if inp_lower not in allowed_outputs and inp not in runtime_inputs:
                 node.inputs = [
-                    i for i in node.inputs if i.lower() in allowed_outputs or i == "target"
+                    i
+                    for i in node.inputs
+                    if i.lower() in allowed_outputs or i in runtime_inputs
                 ]
 
     # Rebuild edges
@@ -66,6 +69,6 @@ def filter_topology_for_mode(topology: GraphTopology, mode: ScanMode) -> GraphTo
         objective=topology.objective,
         nodes=filtered_nodes,
         edges=filtered_edges,
-        runtime_inputs=topology.runtime_inputs,
+        runtime_inputs=sorted(runtime_inputs),
         metadata=topology.metadata,
     )

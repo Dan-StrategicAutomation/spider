@@ -42,6 +42,7 @@ SVC_ENUM_TOOLS = frozenset(
 
 VULN_TOOLS = frozenset(
     {
+        "cve_intelligence",
         "nmap_nse",
         "nuclei_scan",
         "trivy_scan",

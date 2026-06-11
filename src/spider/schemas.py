@@ -452,7 +452,7 @@ class ToolCatalog(BaseModel):
     )
     vuln_tools: list[str] = Field(
         default_factory=list,
-        description="Vulnerability scanning: nmap_nse, nuclei_scan, trivy_scan",
+        description="Vulnerability analysis: cve_intelligence, nmap_nse, nuclei_scan, trivy_scan",
     )
     exploit_tools: list[str] = Field(
         default_factory=list,
@@ -521,6 +521,80 @@ class GraphTopology(BaseModel):
                 if (dep, node.id) not in current_edges:
                     self.edges.append(EdgeDef(source=dep, target=node.id, label="data_flow"))
                     current_edges.add((dep, node.id))
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_execution_contract(self) -> "GraphTopology":
+        """Reject topologies that cannot satisfy DSPy node input contracts."""
+        canonical_outputs = RECON_OUTPUTS | {
+            "attack_plan",
+            "exploit_result",
+            "post_exploit_result",
+        }
+        if not any(node.output in canonical_outputs for node in self.nodes):
+            return self
+
+        runtime_inputs = set(self.runtime_inputs)
+        if "target_spec" not in runtime_inputs:
+            raise ValueError("GraphTopology.runtime_inputs must include 'target_spec'")
+
+        required_inputs_by_kind: dict[NodeKind, set[str]] = {
+            NodeKind.RECON: {"target_spec"},
+            NodeKind.WEB_ENUM: {"recon_results"},
+            NodeKind.SERVICE_ENUM: {"recon_results"},
+            NodeKind.VULNERABILITY_ANALYSIS: {"web_findings", "service_details"},
+            NodeKind.EXPLOIT_PLANNING: {"vulnerabilities"},
+            NodeKind.EXPLOIT_EXECUTION: {"attack_plan", "target_spec"},
+            NodeKind.POST_EXPLOITATION: {"exploit_result", "target_spec"},
+        }
+        report_inputs = {"recon_results", "vulnerabilities"}
+        full_report_inputs = report_inputs | {"attack_plan"}
+
+        node_ids = {node.id for node in self.nodes}
+        producer_by_output = {node.output: node.id for node in self.nodes}
+        output_by_id = {node.id: node.output for node in self.nodes}
+
+        for node in self.nodes:
+            required_inputs = required_inputs_by_kind.get(node.kind, set())
+            if node.kind == NodeKind.REPORTING:
+                required_inputs = (
+                    full_report_inputs if "attack_plan" in node.inputs else report_inputs
+                )
+
+            missing_inputs = sorted(required_inputs - set(node.inputs))
+            if missing_inputs:
+                raise ValueError(
+                    f"Node '{node.id}' kind '{node.kind}' must declare input(s): "
+                    f"{', '.join(missing_inputs)}"
+                )
+
+            for input_name in node.inputs:
+                if input_name in runtime_inputs:
+                    continue
+                producer_id = producer_by_output.get(input_name)
+                if producer_id is None:
+                    raise ValueError(
+                        f"Node '{node.id}' input '{input_name}' has no runtime or "
+                        f"node output source"
+                    )
+                if producer_id not in node.depends_on:
+                    raise ValueError(
+                        f"Node '{node.id}' input '{input_name}' must depend on "
+                        f"producer '{producer_id}'"
+                    )
+
+            for dep in node.depends_on:
+                if dep in runtime_inputs:
+                    continue
+                if dep not in node_ids:
+                    raise ValueError(f"Node '{node.id}' depends on unknown node/input '{dep}'")
+                dep_output = output_by_id[dep]
+                if dep_output not in node.inputs:
+                    raise ValueError(
+                        f"Node '{node.id}' depends on '{dep}' but does not declare "
+                        f"input '{dep_output}'"
+                    )
 
         return self
 

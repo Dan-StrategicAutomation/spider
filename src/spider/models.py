@@ -1,7 +1,9 @@
 """Model routing -- manages DSPy LM instances for different node types.
 
-PRIMARY: Qwen3.5 Abliterated via Ollama (uncensored, local, fits your 3070)
-FALLBACK: OpenRouter cloud models (when Ollama is unavailable)
+Provider modes:
+- ollama: force local Ollama models
+- openrouter: force OpenRouter cloud models
+- auto: use Ollama when available, otherwise OpenRouter fallback
 """
 
 import subprocess
@@ -9,6 +11,8 @@ import subprocess
 import dspy
 
 from spider.config import SpiderConfig
+
+OPENROUTER_PREFIX = "openrouter/"
 
 
 def _ollama_available(base_url: str = "http://localhost:11434") -> bool:
@@ -47,6 +51,13 @@ def pull_model(model_name: str, base_url: str = "http://localhost:11434") -> boo
         return False
 
 
+def _openrouter_model_name(model_name: str) -> str:
+    """Return a LiteLLM OpenRouter model string with the required provider prefix."""
+    if model_name.startswith(OPENROUTER_PREFIX):
+        return model_name
+    return f"{OPENROUTER_PREFIX}{model_name}"
+
+
 def get_lm(config: SpiderConfig, role: str = "primary") -> dspy.LM:
     """Get the appropriate DSPy LM for the given role.
 
@@ -55,12 +66,23 @@ def get_lm(config: SpiderConfig, role: str = "primary") -> dspy.LM:
     - eval: Self-evaluation (4B -- lightweight, runs alongside)
     - fast: Quick payload generation (4B -- low latency)
     - reasoning: Attack chain planning (27B if available, else 9B)
-    - fallback: Cloud model when Ollama is down
+    - fallback: Cloud model when Ollama is down or when explicitly requested
     """
-    if config.openrouter_api_key and not _ollama_available(config.ollama_base_url):
-        # Ollama down, use cloud fallback
+    if config.model_provider == "openrouter":
+        if not config.openrouter_api_key:
+            raise ValueError("SPIDER_OPENROUTER_API_KEY is required when using OpenRouter.")
         return dspy.LM(
-            model=config.fallback_model,
+            model=_openrouter_model_name(config.fallback_model),
+            api_key=config.openrouter_api_key,
+        )
+
+    if (
+        config.model_provider == "auto"
+        and config.openrouter_api_key
+        and not _ollama_available(config.ollama_base_url)
+    ):
+        return dspy.LM(
+            model=_openrouter_model_name(config.fallback_model),
             api_key=config.openrouter_api_key,
         )
 
@@ -77,7 +99,7 @@ def get_lm(config: SpiderConfig, role: str = "primary") -> dspy.LM:
     # For cloud fallback role
     if role == "fallback" and config.openrouter_api_key:
         return dspy.LM(
-            model=config.fallback_model,
+            model=_openrouter_model_name(config.fallback_model),
             api_key=config.openrouter_api_key,
         )
 
