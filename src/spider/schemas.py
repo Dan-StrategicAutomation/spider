@@ -413,6 +413,19 @@ class NodeRole(StrEnum):
     PROGRAM_OF_THOUGHT = "program_of_thought"
 
 
+class NodeKind(StrEnum):
+    """Explicit topology node kinds supported by the node factory."""
+
+    RECON = "recon"
+    WEB_ENUM = "web_enum"
+    SERVICE_ENUM = "service_enum"
+    VULNERABILITY_ANALYSIS = "vulnerability_analysis"
+    EXPLOIT_PLANNING = "exploit_planning"
+    EXPLOIT_EXECUTION = "exploit_execution"
+    POST_EXPLOITATION = "post_exploitation"
+    REPORTING = "reporting"
+
+
 class ToolDef(BaseModel):
     name: str
     description: str = ""
@@ -457,6 +470,9 @@ class ToolCatalog(BaseModel):
 
 class NodeDef(BaseModel):
     id: str = Field(..., description="Unique snake_case ID")
+    kind: NodeKind = Field(
+        ..., description="Explicit node kind used for module and tool validation"
+    )
     role: NodeRole
     name: str
     description: str = Field(..., description="System prompt for this node")
@@ -497,7 +513,7 @@ class GraphTopology(BaseModel):
 
             for dep in node.depends_on:
                 if dep not in id_set:
-                    # Ignore external runtime inputs (like 'target')
+                    # Ignore external runtime inputs (like 'target' or 'target_spec')
                     if dep in self.runtime_inputs:
                         continue
                     # Note: We don't raise error here, we let topological_waves check DAG
