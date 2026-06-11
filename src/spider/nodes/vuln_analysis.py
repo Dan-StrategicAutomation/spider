@@ -8,6 +8,7 @@ from typing import Any
 
 import dspy
 
+from spider.engine.self_eval import VulnAnalysisReward
 from spider.schemas import ServiceDetails, VulnerabilityList, WebFindings
 
 
@@ -37,7 +38,7 @@ class VulnerabilityAnalysisModule(dspy.Module):
             self.analyzer = dspy.Refine(
                 module=base_react,
                 N=config.max_refine_retries,
-                reward_fn=lambda _a, _p: float(len(_p.vulnerabilities.vulnerabilities) > 0),
+                reward_fn=VulnAnalysisReward(),
                 threshold=config.refine_threshold,
             )
         else:

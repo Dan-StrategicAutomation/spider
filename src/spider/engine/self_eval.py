@@ -3,9 +3,20 @@
 Used as reward functions for dspy.Refine on each node type.
 """
 
+from typing import Any
+
 import dspy
 
-from spider.schemas import QualityScore
+from spider.schemas import (
+    QualityScore,
+    ReconResults,
+    RewardEvaluation,
+    ServiceDetails,
+    VulnerabilityList,
+    VulnerabilityRewardContext,
+    WebEnumerationRewardContext,
+    WebFindings,
+)
 
 
 class SelfEvalSignature(dspy.Signature):
@@ -21,6 +32,31 @@ class SelfEvalSignature(dspy.Signature):
     )
     output: str = dspy.InputField()
     evaluation: QualityScore = dspy.OutputField()
+
+
+class VulnerabilityRewardSignature(dspy.Signature):
+    """Evaluate vulnerability analysis as a Refine reward.
+
+    Score the submitted VulnerabilityList against tool evidence in the web findings and service
+    details. A non-empty list should be grounded in evidence, cite CVEs or credible sources, match
+    the service name/version when available, and avoid unsupported CVEs. An empty list can receive a
+    passing score when tool or intelligence evidence supports no vulnerability findings.
+    """
+
+    context: VulnerabilityRewardContext = dspy.InputField()
+    evaluation: RewardEvaluation = dspy.OutputField()
+
+
+class WebEnumerationRewardSignature(dspy.Signature):
+    """Evaluate web enumeration as a Refine reward.
+
+    Score the submitted WebFindings against recon and enumeration evidence. Reward grounded
+    directories, parameters, technologies, potential vulnerability notes, and an evidence-backed
+    empty result when probing found no web surface or no web findings.
+    """
+
+    context: WebEnumerationRewardContext = dspy.InputField()
+    evaluation: RewardEvaluation = dspy.OutputField()
 
 
 class SelfEvaluator(dspy.Module):
@@ -69,20 +105,63 @@ class ReconReward:
 
 
 class VulnAnalysisReward:
-    """Reward for vulnerability analysis quality."""
+    """DSPy-native reward for grounded vulnerability analysis outputs."""
 
-    def __call__(self, args: dict, pred: dspy.Prediction) -> float:
-        vulns = pred.vulnerabilities
-        if not vulns:
-            return 0.3  # Not finding vulns isn't necessarily bad
-        score = min(0.7, len(vulns) * 0.1)
-        if any(v.cve.cvss_score > 7.0 for v in vulns):
-            score += 0.15
-        if any(v.cve.has_public_exploit for v in vulns):
-            score += 0.1
-        if any(v.cve.in_kev for v in vulns):
-            score += 0.05
-        return min(1.0, score)
+    def __init__(self, judge: dspy.Module | None = None):
+        self.judge = judge or dspy.Predict(VulnerabilityRewardSignature)
+
+    def __call__(self, args: dict[str, Any], pred: dspy.Prediction) -> float:
+        vulnerabilities = getattr(pred, "vulnerabilities", None)
+        if not isinstance(vulnerabilities, VulnerabilityList):
+            return 0.0
+
+        web_findings = args.get("web_findings")
+        if not isinstance(web_findings, WebFindings):
+            web_findings = WebFindings()
+
+        service_details = args.get("service_details")
+        if not isinstance(service_details, ServiceDetails):
+            service_details = ServiceDetails()
+
+        context = VulnerabilityRewardContext(
+            web_findings=web_findings,
+            service_details=service_details,
+            vulnerabilities=vulnerabilities,
+        )
+        result = self.judge(context=context)
+        return _reward_score(result)
+
+
+class WebEnumerationReward:
+    """DSPy-native reward for grounded web enumeration outputs."""
+
+    def __init__(self, judge: dspy.Module | None = None):
+        self.judge = judge or dspy.Predict(WebEnumerationRewardSignature)
+
+    def __call__(self, args: dict[str, Any], pred: dspy.Prediction) -> float:
+        web_findings = getattr(pred, "web_findings", None)
+        if not isinstance(web_findings, WebFindings):
+            return 0.0
+
+        recon_results = args.get("recon_results")
+        if not isinstance(recon_results, ReconResults):
+            recon_results = ReconResults()
+
+        context = WebEnumerationRewardContext(
+            recon_results=recon_results,
+            web_findings=web_findings,
+        )
+        result = self.judge(context=context)
+        return _reward_score(result)
+
+
+def _reward_score(result: dspy.Prediction) -> float:
+    evaluation = getattr(result, "evaluation", None)
+    if isinstance(evaluation, RewardEvaluation):
+        return float(evaluation.score)
+    if isinstance(evaluation, dict):
+        return float(RewardEvaluation.model_validate(evaluation).score)
+    return 0.0
 
 
 class ExploitPlanReward:

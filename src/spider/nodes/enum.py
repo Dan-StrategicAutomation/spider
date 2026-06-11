@@ -8,6 +8,7 @@ from typing import Any
 
 import dspy
 
+from spider.engine.self_eval import WebEnumerationReward
 from spider.schemas import ReconResults, ServiceDetails, WebFindings
 
 
@@ -43,7 +44,7 @@ class WebEnumerationModule(dspy.Module):
             self.analyzer = dspy.Refine(
                 module=base_react,
                 N=config.max_refine_retries,
-                reward_fn=lambda _a, _p: float(len(_p.web_findings.directories) > 0),
+                reward_fn=WebEnumerationReward(),
                 threshold=config.refine_threshold,
             )
         else:
