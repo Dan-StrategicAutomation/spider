@@ -4,7 +4,7 @@ Verifies that GraphTopology correctly calculates waves based on NodeDef.depends_
 
 import pytest
 
-from spider.schemas import GraphTopology, NodeDef, NodeRole
+from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
 
 
 def test_topological_waves_follows_depends_on():
@@ -12,6 +12,7 @@ def test_topological_waves_follows_depends_on():
     nodes = [
         NodeDef(
             id="recon",
+            kind=NodeKind.RECON,
             role=NodeRole.REACT,
             name="Recon",
             description="Recon node",
@@ -20,6 +21,7 @@ def test_topological_waves_follows_depends_on():
         ),
         NodeDef(
             id="vuln",
+            kind=NodeKind.VULNERABILITY_ANALYSIS,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Vuln",
             description="Vuln node",
@@ -48,15 +50,36 @@ def test_topological_waves_follows_depends_on():
 def test_multistep_waves():
     """Verify deeper wave calculation."""
     nodes = [
-        NodeDef(id="A", role=NodeRole.REACT, name="A", description="A", output="oA", depends_on=[]),
         NodeDef(
-            id="B", role=NodeRole.REACT, name="B", description="B", output="oB", depends_on=["A"]
+            id="A",
+            kind=NodeKind.RECON,
+            role=NodeRole.REACT,
+            name="A",
+            description="A",
+            output="oA",
+            depends_on=[],
         ),
         NodeDef(
-            id="C", role=NodeRole.REACT, name="C", description="C", output="oC", depends_on=["A"]
+            id="B",
+            kind=NodeKind.RECON,
+            role=NodeRole.REACT,
+            name="B",
+            description="B",
+            output="oB",
+            depends_on=["A"],
+        ),
+        NodeDef(
+            id="C",
+            kind=NodeKind.RECON,
+            role=NodeRole.REACT,
+            name="C",
+            description="C",
+            output="oC",
+            depends_on=["A"],
         ),
         NodeDef(
             id="D",
+            kind=NodeKind.RECON,
             role=NodeRole.REACT,
             name="D",
             description="D",
@@ -77,10 +100,22 @@ def test_cycle_detection():
     """Verify cycle detection works with depends_on."""
     nodes = [
         NodeDef(
-            id="A", role=NodeRole.REACT, name="A", description="A", output="oA", depends_on=["B"]
+            id="A",
+            kind=NodeKind.RECON,
+            role=NodeRole.REACT,
+            name="A",
+            description="A",
+            output="oA",
+            depends_on=["B"],
         ),
         NodeDef(
-            id="B", role=NodeRole.REACT, name="B", description="B", output="oB", depends_on=["A"]
+            id="B",
+            kind=NodeKind.RECON,
+            role=NodeRole.REACT,
+            name="B",
+            description="B",
+            output="oB",
+            depends_on=["A"],
         ),
     ]
 
@@ -95,6 +130,7 @@ def test_orphan_handling():
     nodes = [
         NodeDef(
             id="A",
+            kind=NodeKind.RECON,
             role=NodeRole.REACT,
             name="A",
             description="A",
