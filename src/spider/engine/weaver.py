@@ -14,6 +14,7 @@ from spider.schemas import (
     ExecutionConstraints,
     GraphTopology,
     NodeDef,
+    NodeKind,
     NodeRole,
     PentestGoal,
     ScanMode,
@@ -56,15 +57,18 @@ class TopologyEvaluator(dspy.Module):
 
 class GraphWeaverSignature(dspy.Signature):
     """Design a multi-agent pentest graph topology.
-    The first node MUST be role: react (recon always starts with active reconnaissance).
+    The first node MUST be kind: recon and role: react. Recon always starts
+    with active reconnaissance.
 
     CRITICAL: You MUST use CANONICAL field names for standard outputs:
-    - reconnaissance outputs -> recon_results (Node role: react)
-    - web app enumeration outputs -> web_findings
-    - service probing/enumeration outputs -> service_details
-    - vulnerability scanning outputs -> vulnerabilities
-    - exploit planning outputs -> attack_plan
-    - reporting outputs -> report
+    - recon kind -> recon_results (Node role: react)
+    - web_enum kind -> web_findings
+    - service_enum kind -> service_details
+    - vulnerability_analysis kind -> vulnerabilities
+    - exploit_planning kind -> attack_plan
+    - exploit_execution kind -> exploit_result
+    - post_exploitation kind -> post_exploit_result
+    - reporting kind -> report
 
     DATA FLOW RULE: If Node B consumes 'web_findings', it MUST
     list Node A (the producer) in its 'depends_on' list.
@@ -159,6 +163,7 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
     nodes = [
         NodeDef(
             id="recon",
+            kind=NodeKind.RECON,
             role=NodeRole.REACT,
             name="Reconnaissance",
             description="Discover all hosts, ports, services, and technologies on the target.",
@@ -169,6 +174,7 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
         ),
         NodeDef(
             id="web_enum",
+            kind=NodeKind.WEB_ENUM,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Web Enumeration",
             description="Enumerate web applications, directories, parameters, and technologies.",
@@ -179,6 +185,7 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
         ),
         NodeDef(
             id="service_enum",
+            kind=NodeKind.SERVICE_ENUM,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Service Enumeration",
             description="Probe service versions, configurations, and default credentials.",
@@ -189,6 +196,7 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
         ),
         NodeDef(
             id="vuln_analysis",
+            kind=NodeKind.VULNERABILITY_ANALYSIS,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Vulnerability Analysis",
             description="Match discovered services to known CVEs. Check exploit availability.",
@@ -204,6 +212,7 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
         nodes.append(
             NodeDef(
                 id="exploit_planner",
+                kind=NodeKind.EXPLOIT_PLANNING,
                 role=NodeRole.CHAIN_OF_THOUGHT,
                 name="Exploit Planning",
                 description="Build multi-step attack chains from discovered vulnerabilities.",
@@ -218,6 +227,7 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
     if mode == ScanMode.FULL:
         reporter = NodeDef(
             id="reporter",
+            kind=NodeKind.REPORTING,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Report Generation",
             description="Generate structured pentest report with findings and remediation.",
@@ -229,6 +239,7 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
     else:
         reporter = NodeDef(
             id="reporter",
+            kind=NodeKind.REPORTING,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Report Generation",
             description="Generate structured recon report with findings and remediation.",
@@ -252,4 +263,5 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
         nodes=nodes,
         edges=edges,
         runtime_inputs=["target_spec"],
+        metadata={"scan_mode": mode.value},
     )
