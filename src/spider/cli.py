@@ -1,9 +1,9 @@
 """SPIDER CLI -- main entry point with interactive pentest menus."""
 
-import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import questionary
@@ -595,29 +595,117 @@ def main_menu(session_db, config, orchestrator):
 # ── Entry Point ─────────────────────────────────────────────────────────
 
 
+@dataclass(frozen=True)
+class CliArgs:
+    """Parsed top-level CLI arguments."""
+
+    scan: str | None = None
+    mode: str = ScanMode.RECON.value
+    goal: str = ""
+
+
+def print_help() -> None:
+    """Render top-level help with Rich for clearer scan examples and safety text."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+
+    console = Console()
+    console.print(
+        Panel.fit(
+            "SPIDER -- Symbiotic Pentesting Investigation & DSPy Exploitation Runtime",
+            title="spider",
+            border_style="cyan",
+        )
+    )
+    console.print("[bold]Usage:[/bold] spider [OPTIONS]\n")
+
+    options = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
+    options.add_column("Option", style="cyan", no_wrap=True)
+    options.add_column("Description")
+    options.add_row("-h, --help", "Show this help message and exit.")
+    options.add_row(
+        "--scan TARGET",
+        "Run one non-interactive scan against an authorized target "
+        "(IP address, hostname, or domain). Example: 127.0.0.1",
+    )
+    options.add_row("--mode MODE", "Choose recon, full, or custom. Default: recon.")
+    options.add_row("--goal GOAL", "Natural-language objective required for --mode=custom.")
+    console.print(options)
+
+    modes = Table(title="Scan modes", show_header=True, header_style="bold", box=None)
+    modes.add_column("Mode", style="cyan", no_wrap=True)
+    modes.add_column("What runs")
+    modes.add_column("Operator note")
+    modes.add_row("recon", "Autonomous discovery and enumeration", "Safest first run")
+    modes.add_row("full", "Recon, planning, and HITL-gated exploitation", "Requires approval gates")
+    modes.add_row("custom", "Uses your --goal to build the assessment", "Pair with a precise goal")
+    console.print(modes)
+
+    console.print(
+        "\n[bold]Examples:[/bold]\n"
+        "  spider --scan 127.0.0.1 --mode recon\n"
+        '  spider --scan lab.local --mode custom --goal "Enumerate SSH and web only"'
+    )
+    console.print(
+        "\n[bold]Scope config:[/bold] SPIDER_ALLOWED_TARGETS sets allowed targets; "
+        "SPIDER_EXCLUDED_TARGETS blocks targets; SPIDER_RULES_OF_ENGAGEMENT "
+        "documents constraints."
+    )
+    console.print(
+        "\n[yellow]SAFETY:[/yellow] only scan systems you are authorized to test. "
+        "Full mode keeps exploitation behind human approval.",
+        soft_wrap=True,
+    )
+
+
+def _read_cli_value(
+    option: str, has_inline_value: str, inline_value: str, tokens: list[str], index: int
+) -> tuple[str, int]:
+    """Read a CLI option value from --option=value or --option value syntax."""
+    if has_inline_value:
+        return inline_value, index
+
+    next_index = index + 1
+    if next_index >= len(tokens):
+        error(f"ERROR {option} requires a value. Run 'spider --help' for usage.")
+        sys.exit(2)
+    return tokens[next_index], next_index
+
+
+def parse_cli_args(argv: list[str] | None = None) -> CliArgs:
+    """Parse top-level CLI options while keeping the public interface stable."""
+    tokens = list(sys.argv[1:] if argv is None else argv)
+    values: dict[str, str | None] = {"scan": None, "mode": ScanMode.RECON.value, "goal": ""}
+    options = {"--scan": "scan", "--mode": "mode", "--goal": "goal"}
+    modes = {mode.value for mode in ScanMode}
+    index = 0
+
+    while index < len(tokens):
+        token = tokens[index]
+        option, has_inline_value, inline_value = token.partition("=")
+        if token in ("-h", "--help"):
+            print_help()
+            sys.exit(0)
+        if option not in options:
+            error(f"ERROR Unknown option: {token}. Run 'spider --help' for usage.")
+            sys.exit(2)
+
+        value, index = _read_cli_value(option, has_inline_value, inline_value, tokens, index)
+        if not value:
+            error(f"ERROR {option} requires a non-empty value. Run 'spider --help' for usage.")
+            sys.exit(2)
+        if option == "--mode" and value not in modes:
+            error("ERROR --mode must be one of: recon, full, custom")
+            sys.exit(2)
+        values[options[option]] = value
+        index += 1
+
+    return CliArgs(**values)
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        prog="spider",
-        description="SPIDER -- Symbiotic Pentesting Investigation & DSPy Exploitation Runtime",
-    )
-    parser.add_argument(
-        "--scan",
-        metavar="TARGET",
-        help="Run a single scan against TARGET",
-    )
-    parser.add_argument(
-        "--mode",
-        choices=["recon", "full", "custom"],
-        default="recon",
-        help="Scan mode: recon (default), full, or custom",
-    )
-    parser.add_argument(
-        "--goal",
-        metavar="GOAL",
-        default="",
-        help="Natural language goal (required when --mode=custom)",
-    )
-    args = parser.parse_args()
+    args = parse_cli_args()
 
     session_db = SessionDB()
 
@@ -625,7 +713,7 @@ def main():
         mode = ScanMode(args.mode)
 
         if mode == ScanMode.CUSTOM and not args.goal:
-            print(f"{RED}[✗] --goal is required when --mode=custom{RESET}")
+            error("ERROR --goal is required when --mode=custom")
             sys.exit(1)
 
         # Single-scan mode (non-interactive)

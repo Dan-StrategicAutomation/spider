@@ -53,3 +53,49 @@ def test_main_custom_mode_passes_goal_to_orchestrator(monkeypatch):
     cli.main()
 
     assert orchestrator.run_calls == [{"goal": goal, "target": target, "mode": ScanMode.CUSTOM}]
+
+
+def test_main_help_includes_scan_examples_and_safety_note(monkeypatch, capsys):
+    """CLI help should show actionable scan examples and safety context."""
+    monkeypatch.setattr(sys, "argv", ["spider", "--help"])
+
+    try:
+        cli.main()
+    except SystemExit as exc:
+        assert exc.code == 0
+
+    output = capsys.readouterr().out
+    assert "spider --scan 127.0.0.1 --mode recon" in output
+    assert "--mode=custom" in output
+    assert "Scan modes" in output
+    assert "SPIDER_ALLOWED_TARGETS" in output
+    assert "SPIDER_EXCLUDED_TARGETS" in output
+    assert "only scan systems you are authorized to test" in output
+    assert "Full mode keeps exploitation behind human approval" in output
+
+
+def test_parse_cli_args_supports_equals_style_options():
+    """Manual parser should preserve argparse-compatible --option=value usage."""
+    args = cli.parse_cli_args(
+        [
+            "--scan=127.0.0.1",
+            "--mode=custom",
+            "--goal=Enumerate SSH and web only",
+        ]
+    )
+
+    assert args.scan == "127.0.0.1"
+    assert args.mode == "custom"
+    assert args.goal == "Enumerate SSH and web only"
+
+
+def test_parse_cli_args_reports_missing_option_values(capsys):
+    """Parser errors should remain actionable without loading the full app."""
+    try:
+        cli.parse_cli_args(["--scan"])
+    except SystemExit as exc:
+        assert exc.code == 2
+
+    output = capsys.readouterr().out
+    assert "ERROR --scan requires a value" in output
+    assert "spider --help" in output
