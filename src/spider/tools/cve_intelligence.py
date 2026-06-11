@@ -97,16 +97,21 @@ def _fetch_epss(cve_ids: list[str]) -> dict[str, float]:
     try:
         import httpx
 
-        for cve_id in cve_ids:
+        chunk_size = 50
+        for i in range(0, len(cve_ids), chunk_size):
+            chunk = cve_ids[i:i + chunk_size]
+            cves_str = ",".join(chunk)
+
             resp = httpx.get(
                 "https://api.first.org/data/v1/epss",
-                params={"cve": cve_id},
+                params={"cve": cves_str},
                 timeout=10.0,
             )
             if resp.status_code == 200:
                 data = resp.json()
                 for entry in data.get("data", []):
-                    if entry.get("cve") == cve_id:
+                    cve_id = entry.get("cve")
+                    if cve_id in chunk:
                         score = entry.get("epss", 0.0)
                         epss_lookup[cve_id] = float(score) if score else 0.0
     except Exception:
