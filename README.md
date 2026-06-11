@@ -116,12 +116,30 @@ Edit `.env` before running a scan. At minimum, set an explicit allowed target or
 lab network:
 
 ```bash
+SPIDER_MODEL_PROVIDER=auto
 SPIDER_ALLOWED_TARGETS=192.168.1.0/24
 SPIDER_EXCLUDED_TARGETS=0.0.0.0,127.0.0.1,localhost
 SPIDER_RULES_OF_ENGAGEMENT=No destructive actions without human approval.
 ```
 
-Start Ollama, confirm the model is available, then launch SPIDER:
+`SPIDER_MODEL_PROVIDER` controls LLM routing:
+
+| Value | Behavior |
+| ----- | -------- |
+| `auto` | Use Ollama when reachable, otherwise use OpenRouter if `SPIDER_OPENROUTER_API_KEY` is set. |
+| `ollama` | Force local Ollama using `SPIDER_PRIMARY_MODEL` and `SPIDER_EVAL_MODEL`. |
+| `openrouter` | Force OpenRouter using `SPIDER_FALLBACK_MODEL`. |
+
+Example OpenRouter-only setup:
+
+```bash
+SPIDER_MODEL_PROVIDER=openrouter
+SPIDER_OPENROUTER_API_KEY=sk-or-v1-...
+SPIDER_FALLBACK_MODEL=openrouter/openai/gpt-4o-mini
+```
+
+If you are using `auto` or `ollama`, start Ollama and confirm the model is
+available. Then launch SPIDER:
 
 ```bash
 ollama list

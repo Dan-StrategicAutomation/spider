@@ -46,7 +46,7 @@ def test_runner_fails_wave_when_declared_upstream_output_is_missing():
         output="web_findings",
         depends_on=[],
     )
-    topology = GraphTopology(
+    topology = GraphTopology.model_construct(
         name="missing_upstream_output",
         objective="exercise missing runner input handling",
         nodes=[node],
@@ -102,7 +102,7 @@ def test_runner_normalizes_legacy_target_runtime_input_to_target_spec():
         output="recon_results",
         depends_on=[],
     )
-    topology = GraphTopology(
+    topology = GraphTopology.model_construct(
         name="target_spec_runtime",
         objective="exercise target normalization",
         nodes=[node],

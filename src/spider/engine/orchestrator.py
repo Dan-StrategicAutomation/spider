@@ -16,7 +16,7 @@ from spider.engine.mode_filter import filter_topology_for_mode
 from spider.engine.node_factory import build_node_modules
 from spider.engine.runner import GraphRunner
 from spider.engine.tool_registry import build_tool_catalog, build_tools
-from spider.engine.weaver import GraphTopology, GraphWeaver
+from spider.engine.weaver import GraphTopology, GraphWeaver, validate_topology_contract
 from spider.sandbox.hitl_gate import HITLGate
 from spider.sandbox.scope_guard import ScopeGuard
 from spider.schemas import ExecutionConstraints, PentestGoal, ScanMode, TargetSpec
@@ -175,6 +175,14 @@ class SpiderOrchestrator:
                 progress_fn=self.progress_fn,
             )
             topology = filter_topology_for_mode(prediction.topology, mode)
+        topology_issues = validate_topology_contract(topology, mode)
+        if topology_issues:
+            return {
+                "success": False,
+                "error": f"INVALID_TOPOLOGY: {'; '.join(topology_issues)}",
+                "session_id": session_id,
+                "target": target_spec.target,
+            }
         self.progress_fn(
             "weave_done",
             f"Topology woven: {len(topology.nodes)} nodes, {len(topology.edges)} edges",
@@ -297,6 +305,13 @@ class SpiderOrchestrator:
                     progress_fn=self.progress_fn,
                 )
                 new_topology = filter_topology_for_mode(new_prediction.topology, mode)
+                topology_issues = validate_topology_contract(new_topology, mode)
+                if topology_issues:
+                    current_result = dspy.Prediction(
+                        results=getattr(current_result, "results", {}),
+                        error=f"INVALID_TOPOLOGY: {'; '.join(topology_issues)}",
+                    )
+                    continue
                 new_modules = self._build_node_modules(new_topology, tools, mode=mode)
                 runner = GraphRunner(
                     topology=new_topology,
