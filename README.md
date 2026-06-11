@@ -217,6 +217,7 @@ uv run pytest tests/ -q
 uv run pytest tests/test_safety/ -q
 uv run pytest tests/test_tools/ -q
 uv run pytest tests/test_engine/ -q
+uv run pytest tests/test_intelligence/ -q
 uv run pytest tests/test_integration/ -q
 
 # Lint and format

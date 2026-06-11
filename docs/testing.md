@@ -4,18 +4,11 @@
 
 ```
 tests/
-├── test_scopes/           # Scope guard tests (MUST PASS first)
-│   └── test_scope_guard.py
-├── test_sandbox/          # Sandbox isolation tests
-│   └── test_docker_env.py
-├── test_tools/            # Tool wrapper tests (mocked)
-│   ├── test_adapter.py
-│   ├── test_recon_tools.py
-│   └── test_enum_tools.py
-├── test_nodes/            # DSPy node module tests (mocked LM)
-│   └── test_orchestrator.py
+├── test_safety/           # Scope guard, HITL, and sandbox policy tests
+├── test_tools/            # Tool wrapper tests (mocked external execution)
+├── test_engine/           # Weaver, runner, and topology tests
+├── test_intelligence/     # CVE, EPSS, KEV, and repository/cache tests
 └── test_integration/      # Full graph against lab targets
-    └── test_lab.py
 ```
 
 ## Lab Setup
@@ -37,9 +30,11 @@ All on isolated bridge network. No external internet.
 # Full suite
 uv run pytest tests/ -q
 
-# Safety tests first (MUST PASS)
-uv run pytest tests/test_scopes/ -q
-uv run pytest tests/test_sandbox/ -q
+# Focused suites
+uv run pytest tests/test_safety/ -q
+uv run pytest tests/test_tools/ -q
+uv run pytest tests/test_engine/ -q
+uv run pytest tests/test_intelligence/ -q
 
 # Integration against lab
 uv run pytest tests/test_integration/ -q
