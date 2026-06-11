@@ -148,8 +148,7 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
             warn("Falling back to cloud model")
         else:
             error(
-                "No fallback configured. Set SPIDER_OPENROUTER_API_KEY "
-                "or use OpenRouter provider"
+                "No fallback configured. Set SPIDER_OPENROUTER_API_KEY or use OpenRouter provider"
             )
             sys.exit(1)
 

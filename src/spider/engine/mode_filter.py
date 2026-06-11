@@ -41,11 +41,7 @@ def filter_topology_for_mode(topology: GraphTopology, mode: ScanMode) -> GraphTo
     # Rebuild depends_on to exclude removed nodes
     for node in filtered_nodes:
         node.depends_on = [d for d in node.depends_on if d in allowed_ids]
-        node.inputs = [
-            i
-            for i in node.inputs
-            if i.lower() in RECON_OUTPUTS or i in runtime_inputs
-        ]
+        node.inputs = [i for i in node.inputs if i.lower() in RECON_OUTPUTS or i in runtime_inputs]
 
     # Validate that each remaining node's inputs can be satisfied
     for node in filtered_nodes:
@@ -54,9 +50,7 @@ def filter_topology_for_mode(topology: GraphTopology, mode: ScanMode) -> GraphTo
             # Input must be either a declared runtime input or produced by an allowed node.
             if inp_lower not in allowed_outputs and inp not in runtime_inputs:
                 node.inputs = [
-                    i
-                    for i in node.inputs
-                    if i.lower() in allowed_outputs or i in runtime_inputs
+                    i for i in node.inputs if i.lower() in allowed_outputs or i in runtime_inputs
                 ]
 
     # Rebuild edges
