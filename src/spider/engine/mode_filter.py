@@ -61,11 +61,13 @@ def filter_topology_for_mode(topology: GraphTopology, mode: ScanMode) -> GraphTo
         e for e in topology.edges if e.source in allowed_ids and e.target in allowed_ids
     ]
 
+    metadata = {**topology.metadata, "scan_mode": mode.value}
+
     return GraphTopology(
         name=topology.name,
         objective=topology.objective,
         nodes=filtered_nodes,
         edges=filtered_edges,
         runtime_inputs=topology.runtime_inputs,
-        metadata=topology.metadata,
+        metadata=metadata,
     )

@@ -21,7 +21,7 @@ from spider.engine.tool_registry import (
     WEB_ENUM_TOOLS,
 )
 from spider.sandbox.hitl_gate import HITLGate
-from spider.schemas import GraphTopology, NodeRole
+from spider.schemas import GraphTopology, NodeDef, NodeRole, ScanMode
 
 # ── Output-name → Module class registry ──────────────────────────────────────
 #
@@ -58,7 +58,7 @@ def _get_module_classes() -> dict[str, type]:
     from spider.nodes.exploit_planner import ExploitPlanningModule
     from spider.nodes.post_exploit import PostExploitationModule
     from spider.nodes.recon import ReconModule
-    from spider.nodes.reporter import ReporterModule
+    from spider.nodes.reporter import ReconReporterModule, ReporterModule
     from spider.nodes.vuln_analysis import VulnerabilityAnalysisModule
 
     return {
@@ -70,6 +70,7 @@ def _get_module_classes() -> dict[str, type]:
         "ExecutorModule": ExecutorModule,
         "PostExploitationModule": PostExploitationModule,
         "ReporterModule": ReporterModule,
+        "ReconReporterModule": ReconReporterModule,
     }
 
 
@@ -103,9 +104,30 @@ def _select_tools_for_node(
     return [all_tools[t.name] for t in node_tools if t.name in all_tools]
 
 
+def _scan_mode_from_topology(topology: GraphTopology) -> ScanMode | None:
+    """Return the scan mode declared in topology metadata, if present."""
+    raw_mode = topology.metadata.get("scan_mode") or topology.metadata.get("mode")
+    if raw_mode is None:
+        return None
+    try:
+        return ScanMode(raw_mode)
+    except (TypeError, ValueError):
+        return None
+
+
+def _node_contract_inputs(node: NodeDef, topology: GraphTopology) -> set[str]:
+    """Return topology input names available to a node contract."""
+    output_by_id = {candidate.id: candidate.output for candidate in topology.nodes}
+    inputs = set(node.inputs)
+    inputs.update(output_by_id[dep] for dep in node.depends_on if dep in output_by_id)
+    return inputs
+
+
 def _resolve_module(
     output_name: str,
     node_role: NodeRole,
+    node_inputs: set[str],
+    scan_mode: ScanMode | None,
     node_tools: list[dspy.Tool],
     config: SpiderConfig,
     hitl_gate: HITLGate | None,
@@ -116,6 +138,11 @@ def _resolve_module(
 
     for pattern, class_name, needs_hitl in _REGISTRY:
         if pattern in lower:
+            if class_name == "ReporterModule":
+                if scan_mode == ScanMode.RECON or "attack_plan" not in node_inputs:
+                    return classes["ReconReporterModule"](tools=node_tools, config=config)
+                return classes["ReporterModule"](tools=node_tools, config=config)
+
             cls = classes[class_name]
             kwargs: dict[str, Any] = {"tools": node_tools, "config": config}
             if needs_hitl:
@@ -164,6 +191,7 @@ def build_node_modules(
     """
     classes = _get_module_classes()
     node_modules: dict[str, dspy.Module] = {}
+    scan_mode = _scan_mode_from_topology(topology)
 
     for node in topology.nodes:
         node_tools = _select_tools_for_node(
@@ -176,6 +204,8 @@ def build_node_modules(
         module = _resolve_module(
             output_name=node.output,
             node_role=node.role,
+            node_inputs=_node_contract_inputs(node, topology),
+            scan_mode=scan_mode,
             node_tools=node_tools,
             config=config,
             hitl_gate=hitl_gate,

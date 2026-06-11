@@ -171,6 +171,76 @@ def test_default_topology_recon_has_reporting():
     assert "report" in outputs
 
 
+def test_reporter_signatures_have_mode_specific_inputs():
+    """Reporter signatures must reflect RECON and FULL mode contracts."""
+    from spider.nodes.reporter import ReconReporterSignature, ReporterSignature
+
+    assert set(ReconReporterSignature.input_fields) == {"recon_results", "vulnerabilities"}
+    assert set(ReporterSignature.input_fields) == {
+        "recon_results",
+        "vulnerabilities",
+        "attack_plan",
+    }
+
+
+def test_node_factory_uses_recon_reporter_for_recon_contract(config):
+    """Reporter node without attack_plan input uses the recon reporter module."""
+    from spider.engine.node_factory import build_node_modules
+    from spider.nodes.reporter import ReconReporterModule
+    from spider.schemas import GraphTopology, NodeDef, NodeRole
+
+    topology = GraphTopology(
+        name="recon_report",
+        objective="Recon report",
+        nodes=[
+            NodeDef(
+                id="reporter",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Reporter",
+                description="Generate report",
+                inputs=["recon_results", "vulnerabilities"],
+                output="report",
+            )
+        ],
+        edges=[],
+        runtime_inputs=["recon_results", "vulnerabilities"],
+        metadata={"scan_mode": "recon"},
+    )
+
+    modules = build_node_modules(topology=topology, tools={}, config=config)
+
+    assert isinstance(modules["reporter"], ReconReporterModule)
+
+
+def test_node_factory_uses_full_reporter_for_attack_plan_contract(config):
+    """Reporter node with attack_plan input uses the full reporter module."""
+    from spider.engine.node_factory import build_node_modules
+    from spider.nodes.reporter import ReporterModule
+    from spider.schemas import GraphTopology, NodeDef, NodeRole
+
+    topology = GraphTopology(
+        name="full_report",
+        objective="Full report",
+        nodes=[
+            NodeDef(
+                id="reporter",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Reporter",
+                description="Generate report",
+                inputs=["recon_results", "vulnerabilities", "attack_plan"],
+                output="report",
+            )
+        ],
+        edges=[],
+        runtime_inputs=["recon_results", "vulnerabilities", "attack_plan"],
+        metadata={"scan_mode": "full"},
+    )
+
+    modules = build_node_modules(topology=topology, tools={}, config=config)
+
+    assert isinstance(modules["reporter"], ReporterModule)
+
+
 # ── Topology Post-Filter Tests ────────────────────────────────────────────────
 
 
