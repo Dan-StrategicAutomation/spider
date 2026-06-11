@@ -3,7 +3,15 @@
 import dspy
 
 from spider.engine.runner import GraphRunner
-from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole, ReconResults, TargetSpec, WebFindings
+from spider.schemas import (
+    GraphTopology,
+    NodeDef,
+    NodeKind,
+    NodeRole,
+    ReconResults,
+    TargetSpec,
+    WebFindings,
+)
 
 
 class RequiresReconSignature(dspy.Signature):

@@ -89,10 +89,10 @@ SPIDER is a DSPy-native penetration testing framework. Prefer DSPy primitives, P
 ```bash
 uv sync --all-extras
 uv run pytest tests/ -q
-uv run pytest tests/test_scopes/ -q
-uv run pytest tests/test_sandbox/ -q
+uv run pytest tests/test_safety/ -q
 uv run pytest tests/test_tools/ -q
-uv run pytest tests/test_nodes/ -q
+uv run pytest tests/test_engine/ -q
+uv run pytest tests/test_intelligence/ -q
 uv run pytest tests/test_integration/ -q
 uv run ruff check src/ tests/
 uv run ruff format src/ tests/

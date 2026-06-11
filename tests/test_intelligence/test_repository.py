@@ -105,13 +105,7 @@ def test_epss_batch_score_batches_missing_cves_and_caches_per_cve(tmp_path, monk
         cve_param = kwargs.get("params", {}).get("cve", "")
         requested_batches.append(cve_param)
         return FakeResponse(
-            {
-                "data": [
-                    {"cve": cve_id, "epss": "0.5"}
-                    for cve_id in cve_param.split(",")
-                    if cve_id
-                ]
-            }
+            {"data": [{"cve": cve_id, "epss": "0.5"} for cve_id in cve_param.split(",") if cve_id]}
         )
 
     monkeypatch.setattr("spider.intelligence.epss.requests.get", fake_get)
