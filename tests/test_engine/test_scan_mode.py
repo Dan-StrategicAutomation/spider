@@ -187,7 +187,7 @@ def test_node_factory_uses_recon_reporter_for_recon_contract(config):
     """Reporter node without attack_plan input uses the recon reporter module."""
     from spider.engine.node_factory import build_node_modules
     from spider.nodes.reporter import ReconReporterModule
-    from spider.schemas import GraphTopology, NodeDef, NodeRole
+    from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
 
     topology = GraphTopology(
         name="recon_report",
@@ -195,6 +195,7 @@ def test_node_factory_uses_recon_reporter_for_recon_contract(config):
         nodes=[
             NodeDef(
                 id="reporter",
+                kind=NodeKind.REPORTING,
                 role=NodeRole.CHAIN_OF_THOUGHT,
                 name="Reporter",
                 description="Generate report",
@@ -215,7 +216,7 @@ def test_node_factory_uses_recon_reporter_for_explicit_recon_mode(config):
     """Explicit RECON mode uses the recon reporter even if stale inputs mention attack_plan."""
     from spider.engine.node_factory import build_node_modules
     from spider.nodes.reporter import ReconReporterModule
-    from spider.schemas import GraphTopology, NodeDef, NodeRole
+    from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
 
     topology = GraphTopology(
         name="filtered_recon_report",
@@ -223,6 +224,7 @@ def test_node_factory_uses_recon_reporter_for_explicit_recon_mode(config):
         nodes=[
             NodeDef(
                 id="reporter",
+                kind=NodeKind.REPORTING,
                 role=NodeRole.CHAIN_OF_THOUGHT,
                 name="Reporter",
                 description="Generate report",
@@ -248,7 +250,7 @@ def test_node_factory_uses_full_reporter_for_attack_plan_contract(config):
     """Reporter node with attack_plan input uses the full reporter module."""
     from spider.engine.node_factory import build_node_modules
     from spider.nodes.reporter import ReporterModule
-    from spider.schemas import GraphTopology, NodeDef, NodeRole
+    from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
 
     topology = GraphTopology(
         name="full_report",
@@ -256,6 +258,7 @@ def test_node_factory_uses_full_reporter_for_attack_plan_contract(config):
         nodes=[
             NodeDef(
                 id="reporter",
+                kind=NodeKind.REPORTING,
                 role=NodeRole.CHAIN_OF_THOUGHT,
                 name="Reporter",
                 description="Generate report",
@@ -279,7 +282,7 @@ def test_node_factory_preserves_full_reporter_for_full_modes_without_attack_plan
     """FULL/CUSTOM mode must not silently downgrade malformed reporter contracts."""
     from spider.engine.node_factory import build_node_modules
     from spider.nodes.reporter import ReporterModule
-    from spider.schemas import GraphTopology, NodeDef, NodeRole
+    from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
 
     topology = GraphTopology(
         name="malformed_full_report",
@@ -287,6 +290,7 @@ def test_node_factory_preserves_full_reporter_for_full_modes_without_attack_plan
         nodes=[
             NodeDef(
                 id="exploit_planner",
+                kind=NodeKind.EXPLOIT_PLANNING,
                 role=NodeRole.CHAIN_OF_THOUGHT,
                 name="Exploit Planner",
                 description="Build attack plan",
@@ -295,6 +299,7 @@ def test_node_factory_preserves_full_reporter_for_full_modes_without_attack_plan
             ),
             NodeDef(
                 id="reporter",
+                kind=NodeKind.REPORTING,
                 role=NodeRole.CHAIN_OF_THOUGHT,
                 name="Reporter",
                 description="Generate report",
@@ -321,11 +326,12 @@ def test_node_factory_preserves_full_reporter_for_full_modes_without_attack_plan
 
 def test_topology_post_filter_strips_exploit_nodes():
     """If Weaver produces exploit nodes in RECON mode, post-filter removes them."""
-    from spider.schemas import GraphTopology, NodeDef, NodeRole
+    from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
 
     nodes = [
         NodeDef(
             id="recon",
+            kind=NodeKind.RECON,
             role=NodeRole.REACT,
             name="Recon",
             description="Recon",
@@ -334,6 +340,7 @@ def test_topology_post_filter_strips_exploit_nodes():
         ),
         NodeDef(
             id="vuln",
+            kind=NodeKind.VULNERABILITY_ANALYSIS,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Vuln",
             description="Vuln",
@@ -342,6 +349,7 @@ def test_topology_post_filter_strips_exploit_nodes():
         ),
         NodeDef(
             id="exploit",
+            kind=NodeKind.EXPLOIT_PLANNING,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Exploit",
             description="Exploit",
@@ -350,6 +358,7 @@ def test_topology_post_filter_strips_exploit_nodes():
         ),
         NodeDef(
             id="reporter",
+            kind=NodeKind.REPORTING,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Reporter",
             description="Report",
@@ -374,11 +383,12 @@ def test_topology_post_filter_strips_exploit_nodes():
 
 def test_topology_post_filter_noop_for_full():
     """Post-filter should be a no-op for FULL mode."""
-    from spider.schemas import GraphTopology, NodeDef, NodeRole
+    from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
 
     nodes = [
         NodeDef(
             id="recon",
+            kind=NodeKind.RECON,
             role=NodeRole.REACT,
             name="R",
             description="R",
@@ -387,6 +397,7 @@ def test_topology_post_filter_noop_for_full():
         ),
         NodeDef(
             id="exploit",
+            kind=NodeKind.EXPLOIT_PLANNING,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="E",
             description="E",
@@ -404,11 +415,12 @@ def test_topology_post_filter_noop_for_full():
 
 def test_topology_post_filter_noop_for_custom():
     """Post-filter should be a no-op for CUSTOM mode."""
-    from spider.schemas import GraphTopology, NodeDef, NodeRole
+    from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
 
     nodes = [
         NodeDef(
             id="recon",
+            kind=NodeKind.RECON,
             role=NodeRole.REACT,
             name="R",
             description="R",
@@ -417,6 +429,7 @@ def test_topology_post_filter_noop_for_custom():
         ),
         NodeDef(
             id="exploit",
+            kind=NodeKind.EXPLOIT_PLANNING,
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="E",
             description="E",
