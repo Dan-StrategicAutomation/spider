@@ -225,22 +225,26 @@ authorization.
 
 ## Development
 
-Use `uv` for project commands.
+Use `uv` for project commands. The Make targets below keep `--all-extras` enabled so
+dev tooling remains available after CLI smoke checks.
 
 ```bash
-# Run the full test suite
-uv run pytest tests/ -q
+# Fast safe CLI smoke test (prints help only; no scan or model initialization)
+make smoke
+
+# Run the full non-integration test suite
+make test
 
 # Run focused suites
-uv run pytest tests/test_safety/ -q
-uv run pytest tests/test_tools/ -q
-uv run pytest tests/test_engine/ -q
-uv run pytest tests/test_intelligence/ -q
-uv run pytest tests/test_integration/ -q
+uv run --all-extras python -m pytest tests/test_safety/ -q
+uv run --all-extras python -m pytest tests/test_tools/ -q
+uv run --all-extras python -m pytest tests/test_engine/ -q
+uv run --all-extras python -m pytest tests/test_intelligence/ -q
+uv run --all-extras python -m pytest tests/test_integration/ -q
 
 # Lint and format
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
+make lint
+make format
 ```
 
 The development contract for AI agents and contributors is in
