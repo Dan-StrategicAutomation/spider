@@ -10,8 +10,9 @@ those binaries are present.
 
 import json
 import socket
-import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from spider.tools.execution import ToolExecutionBackend, get_default_execution_backend
 
 # ---------------------------------------------------------------------------
 # Python-native tools (no binary required)
@@ -205,32 +206,46 @@ def tcp_port_scan(target: str, ports: str = DEFAULT_PORTS, timeout: float = 1.0,
 # ---------------------------------------------------------------------------
 
 
-def nmap_scan(target: str, ports: str = "-T4 -sV -p-", args: str = "-sC", **kwargs) -> str:
+def nmap_scan(
+    target: str,
+    ports: str = "-T4 -sV -p-",
+    args: str = "-sC",
+    backend: ToolExecutionBackend | None = None,
+    **kwargs,
+) -> str:
     """Run nmap scan against target. Returns open ports, service versions, and OS
     detection. Use for comprehensive reconnaissance of a single host."""
     cmd = ["nmap"] + ports.split() + args.split() + ["-oX", "-", target]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    executor = backend or get_default_execution_backend()
+    result = executor.execute(cmd, timeout=600)
     return json.dumps(
         {
-            "success": result.returncode == 0,
+            "success": result.exit_code == 0,
             "xml_output": result.stdout[:50000],
             "errors": result.stderr[:2000],
-            "exit_code": result.returncode,
+            "exit_code": result.exit_code,
         }
     )
 
 
-def masscan_scan(target: str, ports: str = "1-65535", rate: str = "1000", **kwargs) -> str:
+def masscan_scan(
+    target: str,
+    ports: str = "1-65535",
+    rate: str = "1000",
+    backend: ToolExecutionBackend | None = None,
+    **kwargs,
+) -> str:
     """Run masscan for fast port scanning of targets or ranges. Finds open ports
     quickly, then hand off to nmap for service detection"""
     cmd = ["masscan", "-p", ports, target, "--rate", rate, "--output-format", "json"]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    executor = backend or get_default_execution_backend()
+    result = executor.execute(cmd, timeout=300)
     return json.dumps(
         {
-            "success": result.returncode == 0,
+            "success": result.exit_code == 0,
             "output": result.stdout[:50000],
             "errors": result.stderr[:2000],
-            "exit_code": result.returncode,
+            "exit_code": result.exit_code,
         }
     )
 
