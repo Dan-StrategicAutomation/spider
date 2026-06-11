@@ -100,6 +100,12 @@ def test_recon_catalog_exposes_tcp_scan_for_service_enum():
     assert catalog.service_enum_tools == ["tcp_port_scan"]
 
 
+def test_recon_catalog_exposes_cve_intelligence_for_vulnerability_analysis():
+    """RECON catalog should let vulnerability analysis use CVE intelligence."""
+    catalog = build_tool_catalog({"cve_intelligence"}, ScanMode.RECON)
+    assert catalog.vuln_tools == ["cve_intelligence"]
+
+
 def test_full_catalog_has_exploit_tools():
     """FULL catalog should populate exploit_tools."""
     tools = build_tools(mode=ScanMode.FULL)
@@ -210,7 +216,7 @@ def test_node_factory_uses_recon_reporter_for_recon_contract(config):
             )
         ],
         edges=[],
-        runtime_inputs=["recon_results", "vulnerabilities"],
+        runtime_inputs=["target_spec", "recon_results", "vulnerabilities"],
     )
 
     modules = build_node_modules(topology=topology, tools={}, config=config)
@@ -239,7 +245,7 @@ def test_node_factory_uses_recon_reporter_for_explicit_recon_mode(config):
             )
         ],
         edges=[],
-        runtime_inputs=["recon_results", "vulnerabilities", "attack_plan"],
+        runtime_inputs=["target_spec", "recon_results", "vulnerabilities", "attack_plan"],
     )
 
     modules = build_node_modules(
@@ -273,7 +279,7 @@ def test_node_factory_uses_full_reporter_for_attack_plan_contract(config):
             )
         ],
         edges=[],
-        runtime_inputs=["recon_results", "vulnerabilities", "attack_plan"],
+        runtime_inputs=["target_spec", "recon_results", "vulnerabilities", "attack_plan"],
     )
 
     modules = build_node_modules(topology=topology, tools={}, config=config)
@@ -314,7 +320,7 @@ def test_node_factory_preserves_full_reporter_for_full_modes_without_attack_plan
             ),
         ],
         edges=[],
-        runtime_inputs=["recon_results", "vulnerabilities"],
+        runtime_inputs=["target_spec", "recon_results", "vulnerabilities"],
     )
 
     modules = build_node_modules(
@@ -341,6 +347,7 @@ def test_topology_post_filter_strips_exploit_nodes():
             role=NodeRole.REACT,
             name="Recon",
             description="Recon",
+            inputs=["target_spec"],
             output="recon_results",
             depends_on=[],
         ),
@@ -350,7 +357,28 @@ def test_topology_post_filter_strips_exploit_nodes():
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Vuln",
             description="Vuln",
+            inputs=["web_findings", "service_details"],
             output="vulnerabilities",
+            depends_on=["web_enum", "service_enum"],
+        ),
+        NodeDef(
+            id="web_enum",
+            kind=NodeKind.WEB_ENUM,
+            role=NodeRole.CHAIN_OF_THOUGHT,
+            name="Web Enumeration",
+            description="Web Enumeration",
+            inputs=["recon_results"],
+            output="web_findings",
+            depends_on=["recon"],
+        ),
+        NodeDef(
+            id="service_enum",
+            kind=NodeKind.SERVICE_ENUM,
+            role=NodeRole.CHAIN_OF_THOUGHT,
+            name="Service Enumeration",
+            description="Service Enumeration",
+            inputs=["recon_results"],
+            output="service_details",
             depends_on=["recon"],
         ),
         NodeDef(
@@ -359,6 +387,7 @@ def test_topology_post_filter_strips_exploit_nodes():
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Exploit",
             description="Exploit",
+            inputs=["vulnerabilities"],
             output="attack_plan",
             depends_on=["vuln"],
         ),
@@ -368,12 +397,19 @@ def test_topology_post_filter_strips_exploit_nodes():
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="Reporter",
             description="Report",
+            inputs=["recon_results", "vulnerabilities", "attack_plan"],
             output="report",
             depends_on=["recon", "vuln", "exploit"],
         ),
     ]
 
-    topo = GraphTopology(name="test", objective="test", nodes=nodes, edges=[])
+    topo = GraphTopology(
+        name="test",
+        objective="test",
+        nodes=nodes,
+        edges=[],
+        runtime_inputs=["target_spec"],
+    )
     filtered = filter_topology_for_mode(topo, ScanMode.RECON)
 
     node_ids = {n.id for n in filtered.nodes}
@@ -387,6 +423,91 @@ def test_topology_post_filter_strips_exploit_nodes():
     assert "exploit" not in reporter.depends_on
 
 
+def test_topology_post_filter_preserves_target_spec_runtime_input():
+    """RECON filtering must keep structured target input grounding for root nodes."""
+    from spider.engine.weaver import validate_topology_contract
+    from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
+
+    nodes = [
+        NodeDef(
+            id="recon",
+            kind=NodeKind.RECON,
+            role=NodeRole.REACT,
+            name="Recon",
+            description="Recon",
+            inputs=["target_spec"],
+            output="recon_results",
+            depends_on=[],
+        ),
+        NodeDef(
+            id="reporter",
+            kind=NodeKind.REPORTING,
+            role=NodeRole.CHAIN_OF_THOUGHT,
+            name="Reporter",
+            description="Report",
+            inputs=["recon_results", "vulnerabilities", "attack_plan"],
+            output="report",
+            depends_on=["recon", "vuln", "exploit"],
+        ),
+        NodeDef(
+            id="vuln",
+            kind=NodeKind.VULNERABILITY_ANALYSIS,
+            role=NodeRole.CHAIN_OF_THOUGHT,
+            name="Vulnerability Analysis",
+            description="Analyze vulnerabilities.",
+            inputs=["web_findings", "service_details"],
+            output="vulnerabilities",
+            depends_on=["web_enum", "service_enum"],
+        ),
+        NodeDef(
+            id="web_enum",
+            kind=NodeKind.WEB_ENUM,
+            role=NodeRole.CHAIN_OF_THOUGHT,
+            name="Web Enumeration",
+            description="Enumerate web targets.",
+            inputs=["recon_results"],
+            output="web_findings",
+            depends_on=["recon"],
+        ),
+        NodeDef(
+            id="service_enum",
+            kind=NodeKind.SERVICE_ENUM,
+            role=NodeRole.CHAIN_OF_THOUGHT,
+            name="Service Enumeration",
+            description="Enumerate services.",
+            inputs=["recon_results"],
+            output="service_details",
+            depends_on=["recon"],
+        ),
+        NodeDef(
+            id="exploit",
+            kind=NodeKind.EXPLOIT_PLANNING,
+            role=NodeRole.CHAIN_OF_THOUGHT,
+            name="Exploit",
+            description="Exploit",
+            inputs=["vulnerabilities"],
+            output="attack_plan",
+            depends_on=[],
+        ),
+    ]
+    topo = GraphTopology.model_construct(
+        name="test",
+        objective="test",
+        nodes=nodes,
+        edges=[],
+        runtime_inputs=[],
+    )
+
+    filtered = filter_topology_for_mode(topo, ScanMode.RECON)
+
+    recon = next(n for n in filtered.nodes if n.id == "recon")
+    reporter = next(n for n in filtered.nodes if n.id == "reporter")
+    assert "target_spec" in filtered.runtime_inputs
+    assert recon.inputs == ["target_spec"]
+    assert "attack_plan" not in reporter.inputs
+    assert validate_topology_contract(filtered, ScanMode.RECON) == []
+
+
 def test_topology_post_filter_noop_for_full():
     """Post-filter should be a no-op for FULL mode."""
     from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole
@@ -398,6 +519,7 @@ def test_topology_post_filter_noop_for_full():
             role=NodeRole.REACT,
             name="R",
             description="R",
+            inputs=["target_spec"],
             output="recon_results",
             depends_on=[],
         ),
@@ -407,12 +529,19 @@ def test_topology_post_filter_noop_for_full():
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="E",
             description="E",
+            inputs=["vulnerabilities"],
             output="attack_plan",
-            depends_on=["recon"],
+            depends_on=[],
         ),
     ]
 
-    topo = GraphTopology(name="test", objective="test", nodes=nodes, edges=[])
+    topo = GraphTopology(
+        name="test",
+        objective="test",
+        nodes=nodes,
+        edges=[],
+        runtime_inputs=["target_spec", "vulnerabilities"],
+    )
     filtered = filter_topology_for_mode(topo, ScanMode.FULL)
 
     assert len(filtered.nodes) == 2
@@ -430,6 +559,7 @@ def test_topology_post_filter_noop_for_custom():
             role=NodeRole.REACT,
             name="R",
             description="R",
+            inputs=["target_spec"],
             output="recon_results",
             depends_on=[],
         ),
@@ -439,12 +569,19 @@ def test_topology_post_filter_noop_for_custom():
             role=NodeRole.CHAIN_OF_THOUGHT,
             name="E",
             description="E",
+            inputs=["vulnerabilities"],
             output="attack_plan",
-            depends_on=["recon"],
+            depends_on=[],
         ),
     ]
 
-    topo = GraphTopology(name="test", objective="test", nodes=nodes, edges=[])
+    topo = GraphTopology(
+        name="test",
+        objective="test",
+        nodes=nodes,
+        edges=[],
+        runtime_inputs=["target_spec", "vulnerabilities"],
+    )
     filtered = filter_topology_for_mode(topo, ScanMode.CUSTOM)
 
     assert len(filtered.nodes) == 2

@@ -31,17 +31,21 @@ class VulnerabilityAnalysisModule(dspy.Module):
     def __init__(self, tools: list[dspy.Tool], config: Any | None = None, **kwargs):
         super().__init__()
         self.config = config
-        base_react = dspy.ReAct(VulnAnalysisSignature, tools=tools)
+        base_module = (
+            dspy.ReAct(VulnAnalysisSignature, tools=tools)
+            if tools
+            else dspy.Predict(VulnAnalysisSignature)
+        )
 
         if config and config.use_refine:
             self.analyzer = dspy.Refine(
-                module=base_react,
+                module=base_module,
                 N=config.max_refine_retries,
                 reward_fn=lambda _a, _p: float(len(_p.vulnerabilities.vulnerabilities) > 0),
                 threshold=config.refine_threshold,
             )
         else:
-            self.analyzer = base_react
+            self.analyzer = base_module
 
     def forward(
         self, web_findings: WebFindings, service_details: ServiceDetails

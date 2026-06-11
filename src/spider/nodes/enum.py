@@ -37,17 +37,20 @@ class WebEnumerationModule(dspy.Module):
     def __init__(self, tools: list[dspy.Tool], config: Any | None = None, **kwargs):
         super().__init__()
         self.config = config
-        base_react = dspy.ReAct(WebEnumSignature, tools=tools)
+        if tools:
+            base_module = dspy.ReAct(WebEnumSignature, tools=tools)
+        else:
+            base_module = dspy.Predict(WebEnumSignature)
 
         if config and config.use_refine:
             self.analyzer = dspy.Refine(
-                module=base_react,
+                module=base_module,
                 N=config.max_refine_retries,
                 reward_fn=lambda _a, _p: float(len(_p.web_findings.directories) > 0),
                 threshold=config.refine_threshold,
             )
         else:
-            self.analyzer = base_react
+            self.analyzer = base_module
 
     def forward(self, recon_results: ReconResults) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):
@@ -60,17 +63,20 @@ class ServiceEnumerationModule(dspy.Module):
     def __init__(self, tools: list[dspy.Tool], config: Any | None = None, **kwargs):
         super().__init__()
         self.config = config
-        base_react = dspy.ReAct(SvcEnumSignature, tools=tools)
+        if tools:
+            base_module = dspy.ReAct(SvcEnumSignature, tools=tools)
+        else:
+            base_module = dspy.Predict(SvcEnumSignature)
 
         if config and config.use_refine:
             self.analyzer = dspy.Refine(
-                module=base_react,
+                module=base_module,
                 N=config.max_refine_retries,
                 reward_fn=lambda _a, _p: float(len(_p.service_details.service_name) > 0),
                 threshold=config.refine_threshold,
             )
         else:
-            self.analyzer = base_react
+            self.analyzer = base_module
 
     def forward(self, recon_results: ReconResults) -> dspy.Prediction:
         with dspy.settings.context(temperature=0.1):

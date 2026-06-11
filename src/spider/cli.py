@@ -130,17 +130,26 @@ def init_spider() -> tuple[SpiderConfig, SpiderOrchestrator]:
     if missing_opt:
         info(f"Optional tools missing: {', '.join([t['name'] for t in missing_opt])}")
 
-    # Check Ollama
-    if _ollama_available(config.ollama_base_url):
+    # Check configured model provider
+    info(f"Model provider: {config.model_provider}")
+    if config.model_provider == "openrouter":
+        if not config.openrouter_api_key:
+            error("OpenRouter selected but SPIDER_OPENROUTER_API_KEY is not configured")
+            sys.exit(1)
+        success("OpenRouter configured")
+        info(f"Fallback/cloud model: {config.fallback_model}")
+    elif _ollama_available(config.ollama_base_url):
         success(f"Ollama running at {config.ollama_base_url}")
         info(f"Primary model: {config.primary_model}")
         info(f"Eval model: {config.eval_model}")
     else:
         error("Ollama not reachable")
-        if config.openrouter_api_key:
+        if config.model_provider == "auto" and config.openrouter_api_key:
             warn("Falling back to cloud model")
         else:
-            error("No fallback configured. Set OPENROUTER_API_KEY")
+            error(
+                "No fallback configured. Set SPIDER_OPENROUTER_API_KEY or use OpenRouter provider"
+            )
             sys.exit(1)
 
     # Configure DSPy
@@ -567,8 +576,10 @@ def main_menu(session_db, config, orchestrator):
             pull_models(config)
         elif choice == "4":
             divider("CONFIGURATION")
+            print(f"  Model provider: {CYAN}{config.model_provider}{RESET}")
             print(f"  Primary model:  {CYAN}{config.primary_model}{RESET}")
             print(f"  Eval model:     {CYAN}{config.eval_model}{RESET}")
+            print(f"  Cloud model:    {CYAN}{config.fallback_model}{RESET}")
             print(f"  Ollama URL:     {CYAN}{config.ollama_base_url}{RESET}")
             targets_str = ", ".join(config.allowed_targets) or "None (unrestricted)"
             print(f"  Allowed targets: {CYAN}{targets_str}{RESET}")

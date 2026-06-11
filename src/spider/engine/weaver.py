@@ -23,6 +23,19 @@ from spider.schemas import (
     TopologyScore,
 )
 
+_RECON_REPORT_INPUTS = frozenset({"recon_results", "vulnerabilities"})
+_FULL_REPORT_INPUTS = frozenset({"recon_results", "vulnerabilities", "attack_plan"})
+
+_REQUIRED_INPUTS_BY_KIND: dict[NodeKind, frozenset[str]] = {
+    NodeKind.RECON: frozenset({"target_spec"}),
+    NodeKind.WEB_ENUM: frozenset({"recon_results"}),
+    NodeKind.SERVICE_ENUM: frozenset({"recon_results"}),
+    NodeKind.VULNERABILITY_ANALYSIS: frozenset({"web_findings", "service_details"}),
+    NodeKind.EXPLOIT_PLANNING: frozenset({"vulnerabilities"}),
+    NodeKind.EXPLOIT_EXECUTION: frozenset({"attack_plan", "target_spec"}),
+    NodeKind.POST_EXPLOITATION: frozenset({"exploit_result", "target_spec"}),
+}
+
 
 class TopologyEvalSignature(dspy.Signature):
     """Evaluate a woven pentest topology for quality and validity. Check:
@@ -76,6 +89,14 @@ class GraphWeaverSignature(dspy.Signature):
     Must be a DAG. NO cycles. Edges flow FORWARD only.
     Include HITL nodes for exploitation steps.
 
+    REQUIRED INPUT DECLARATIONS:
+    - topology.runtime_inputs MUST include "target_spec"
+    - recon nodes MUST have inputs: ["target_spec"]
+    - web_enum and service_enum nodes MUST consume "recon_results"
+    - vulnerability_analysis nodes MUST consume both "web_findings" and "service_details"
+    - recon reporting nodes MUST consume "recon_results" and "vulnerabilities"
+    - full reporting nodes MUST also consume "attack_plan"
+
     NAMING RULE: Provide descriptive, user-friendly 'name' fields for each node
     (e.g., 'Target Reconnaissance' instead of 'react_node_1')."""
 
@@ -115,6 +136,13 @@ class GraphWeaver(dspy.Module):
             except ValueError:
                 self.progress_fn("weave_attempt", "  Draft rejected: cycle detected")
                 return 0.0
+
+            issues = validate_topology_contract(topo)
+            if issues:
+                preview = "; ".join(issues[:3])
+                self.progress_fn("weave_attempt", f"  Draft rejected: {preview}")
+                return 0.0
+
             # Quality validation
             goal = args.get("goal", PentestGoal(objective="Evaluate pentest topology"))
             score = topology_eval(goal=goal, topology_json=topo.model_dump_json())
@@ -149,6 +177,88 @@ class GraphWeaver(dspy.Module):
 
         with dspy.settings.context(temperature=0.1):
             return self.weave(goal=goal_spec, **kwargs)
+
+
+def required_inputs_for_node(node: NodeDef, scan_mode: ScanMode | None = None) -> frozenset[str]:
+    """Return the module signature inputs required by a topology node kind."""
+    if node.kind == NodeKind.REPORTING:
+        if scan_mode in (ScanMode.FULL, ScanMode.CUSTOM) or "attack_plan" in node.inputs:
+            return _FULL_REPORT_INPUTS
+        return _RECON_REPORT_INPUTS
+    return _REQUIRED_INPUTS_BY_KIND.get(node.kind, frozenset())
+
+
+def validate_topology_contract(
+    topology: GraphTopology,
+    scan_mode: ScanMode | None = None,
+) -> list[str]:
+    """Validate that node inputs can be sourced from runtime inputs or dependencies.
+
+    The LLM quality judge can miss data-flow errors. This deterministic check
+    mirrors the runner's strict input sourcing before a topology reaches execution.
+    """
+    issues: list[str] = []
+    node_ids = {node.id for node in topology.nodes}
+    output_by_id = {node.id: node.output for node in topology.nodes}
+    producer_by_output = {node.output: node.id for node in topology.nodes}
+    runtime_inputs = set(topology.runtime_inputs)
+
+    if "target_spec" not in runtime_inputs:
+        issues.append("Topology must declare runtime input 'target_spec'.")
+
+    try:
+        waves = topology.topological_waves()
+    except ValueError as exc:
+        return [str(exc)]
+
+    first_wave = set(waves[0]) if waves else set()
+    recon_roots = [
+        node for node in topology.nodes if node.kind == NodeKind.RECON and node.id in first_wave
+    ]
+    if not recon_roots:
+        issues.append("First wave must include a recon node.")
+    if any(node.role != NodeRole.REACT for node in recon_roots):
+        issues.append("First-wave recon nodes must use role 'react'.")
+
+    for node in topology.nodes:
+        missing_declared = sorted(required_inputs_for_node(node, scan_mode) - set(node.inputs))
+        if missing_declared:
+            issues.append(
+                f"Node '{node.id}' kind '{node.kind}' must declare input(s): "
+                f"{', '.join(missing_declared)}."
+            )
+
+        for dep in node.depends_on:
+            if dep not in node_ids and dep not in runtime_inputs:
+                issues.append(f"Node '{node.id}' depends on unknown node/input '{dep}'.")
+
+        for input_name in node.inputs:
+            if input_name in runtime_inputs:
+                continue
+
+            producer_id = producer_by_output.get(input_name)
+            if producer_id is None:
+                issues.append(
+                    f"Node '{node.id}' input '{input_name}' has no runtime or node output source."
+                )
+                continue
+
+            if producer_id not in node.depends_on:
+                issues.append(
+                    f"Node '{node.id}' input '{input_name}' must depend on producer "
+                    f"'{producer_id}'."
+                )
+
+        for dep in node.depends_on:
+            if dep in node_ids:
+                dep_output = output_by_id[dep]
+                if dep_output not in node.inputs:
+                    issues.append(
+                        f"Node '{node.id}' depends on '{dep}' but does not declare "
+                        f"input '{dep_output}'."
+                    )
+
+    return issues
 
 
 def build_default_topology(mode: ScanMode) -> GraphTopology | None:

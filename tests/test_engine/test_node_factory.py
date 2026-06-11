@@ -39,7 +39,14 @@ def _topology(node: NodeDef) -> GraphTopology:
         objective="validate explicit node kinds",
         nodes=[node],
         edges=[],
-        runtime_inputs=["target"],
+        runtime_inputs=[
+            "target_spec",
+            "recon_results",
+            "web_findings",
+            "service_details",
+            "vulnerabilities",
+            "attack_plan",
+        ],
     )
 
 
@@ -85,6 +92,7 @@ def test_build_node_modules_rejects_unsupported_output_for_kind():
         role=NodeRole.CHAIN_OF_THOUGHT,
         name="Web Enumeration",
         description="Bad output.",
+        inputs=["recon_results"],
         output="vulnerabilities",
     )
 
@@ -100,6 +108,7 @@ def test_build_node_modules_rejects_mismatched_tool_category():
         role=NodeRole.CHAIN_OF_THOUGHT,
         name="Web Enumeration",
         description="Wrong tool category.",
+        inputs=["recon_results"],
         output="web_findings",
         tools=[ToolDef(name="nmap_scan")],
     )
@@ -134,6 +143,28 @@ def test_build_node_modules_allows_tcp_port_scan_for_service_enum():
     assert modules["service_enum"].__class__.__name__ == "ServiceEnumerationModule"
 
 
+def test_build_node_modules_defaults_to_available_kind_tools_when_omitted():
+    """Omitted node tools should not create a ReAct module with only finish available."""
+    node = NodeDef(
+        id="recon",
+        kind=NodeKind.RECON,
+        role=NodeRole.REACT,
+        name="Recon",
+        description="Discover the target.",
+        inputs=["target_spec"],
+        output="recon_results",
+    )
+
+    modules = build_node_modules(
+        topology=_topology(node),
+        tools={"nmap_scan": dspy.Tool(nmap_scan)},
+        config=_config(),
+    )
+
+    react = modules["recon"].agent
+    assert "nmap_scan" in react.tools
+
+
 def test_build_node_modules_rejects_unavailable_declared_tool():
     """Nodes should fail fast when they name a tool that was not registered."""
     node = NodeDef(
@@ -142,6 +173,7 @@ def test_build_node_modules_rejects_unavailable_declared_tool():
         role=NodeRole.REACT,
         name="Recon",
         description="Missing tool.",
+        inputs=["target_spec"],
         output="recon_results",
         tools=[ToolDef(name="nmap_scan")],
     )
