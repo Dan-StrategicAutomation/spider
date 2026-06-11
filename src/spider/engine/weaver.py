@@ -235,5 +235,4 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
         nodes=nodes,
         edges=edges,
         runtime_inputs=["target"],
-        metadata={"scan_mode": mode.value},
     )

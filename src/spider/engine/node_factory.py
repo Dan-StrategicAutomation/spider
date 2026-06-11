@@ -182,16 +182,18 @@ def build_node_modules(
     config: SpiderConfig,
     hitl_gate: HITLGate | None = None,
     progress_fn: Callable[[str, str], None] | None = None,
+    scan_mode: ScanMode | None = None,
 ) -> dict[str, dspy.Module]:
     """Build DSPy modules for each node in the topology.
 
     Maps each node to its module class via the canonical output name,
-    selects the appropriate tool subset, and loads compiled weights
+    selects the appropriate tool subset, chooses reporter contracts from
+    topology inputs or explicit scan mode, and loads compiled weights
     if available.
     """
     classes = _get_module_classes()
     node_modules: dict[str, dspy.Module] = {}
-    scan_mode = _scan_mode_from_topology(topology)
+    resolved_scan_mode = scan_mode or _scan_mode_from_topology(topology)
 
     for node in topology.nodes:
         node_tools = _select_tools_for_node(
@@ -205,7 +207,7 @@ def build_node_modules(
             output_name=node.output,
             node_role=node.role,
             node_inputs=_node_contract_inputs(node, topology),
-            scan_mode=scan_mode,
+            scan_mode=resolved_scan_mode,
             node_tools=node_tools,
             config=config,
             hitl_gate=hitl_gate,

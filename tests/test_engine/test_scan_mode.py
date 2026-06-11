@@ -204,10 +204,42 @@ def test_node_factory_uses_recon_reporter_for_recon_contract(config):
         ],
         edges=[],
         runtime_inputs=["recon_results", "vulnerabilities"],
-        metadata={"scan_mode": "recon"},
     )
 
     modules = build_node_modules(topology=topology, tools={}, config=config)
+
+    assert isinstance(modules["reporter"], ReconReporterModule)
+
+
+def test_node_factory_uses_recon_reporter_for_explicit_recon_mode(config):
+    """Explicit RECON mode uses the recon reporter even if stale inputs mention attack_plan."""
+    from spider.engine.node_factory import build_node_modules
+    from spider.nodes.reporter import ReconReporterModule
+    from spider.schemas import GraphTopology, NodeDef, NodeRole
+
+    topology = GraphTopology(
+        name="filtered_recon_report",
+        objective="Recon report",
+        nodes=[
+            NodeDef(
+                id="reporter",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Reporter",
+                description="Generate report",
+                inputs=["recon_results", "vulnerabilities", "attack_plan"],
+                output="report",
+            )
+        ],
+        edges=[],
+        runtime_inputs=["recon_results", "vulnerabilities", "attack_plan"],
+    )
+
+    modules = build_node_modules(
+        topology=topology,
+        tools={},
+        config=config,
+        scan_mode=ScanMode.RECON,
+    )
 
     assert isinstance(modules["reporter"], ReconReporterModule)
 
@@ -233,7 +265,6 @@ def test_node_factory_uses_full_reporter_for_attack_plan_contract(config):
         ],
         edges=[],
         runtime_inputs=["recon_results", "vulnerabilities", "attack_plan"],
-        metadata={"scan_mode": "full"},
     )
 
     modules = build_node_modules(topology=topology, tools={}, config=config)
