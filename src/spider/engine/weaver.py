@@ -11,10 +11,13 @@ import dspy
 from spider.config import SpiderConfig
 from spider.schemas import (
     EdgeDef,
+    ExecutionConstraints,
     GraphTopology,
     NodeDef,
     NodeRole,
+    PentestGoal,
     ScanMode,
+    TargetSpec,
     ToolCatalog,
     TopologyScore,
 )
@@ -34,8 +37,8 @@ class TopologyEvalSignature(dspy.Signature):
         svc_enum -> service_details, vuln_scan -> vulnerabilities,
         exploit_planner -> attack_plan, reporter -> report"""
 
-    goal: str = dspy.InputField()
-    topology_json: str = dspy.InputField()
+    goal: PentestGoal = dspy.InputField()
+    topology_json: str = dspy.InputField(desc="Serialized topology JSON to evaluate")
     evaluation: TopologyScore = dspy.OutputField()
 
 
@@ -46,7 +49,7 @@ class TopologyEvaluator(dspy.Module):
         super().__init__()
         self.judge = dspy.ChainOfThought(TopologyEvalSignature)
 
-    def forward(self, goal: str, topology_json: str) -> float:
+    def forward(self, goal: PentestGoal, topology_json: str) -> float:
         result = self.judge(goal=goal, topology_json=topology_json)
         return float(result.evaluation.score)
 
@@ -72,9 +75,9 @@ class GraphWeaverSignature(dspy.Signature):
     NAMING RULE: Provide descriptive, user-friendly 'name' fields for each node
     (e.g., 'Target Reconnaissance' instead of 'react_node_1')."""
 
-    goal: str = dspy.InputField()
-    target_info: str = dspy.InputField()
-    constraints_text: str = dspy.InputField()
+    goal: PentestGoal = dspy.InputField()
+    target_spec: TargetSpec = dspy.InputField()
+    constraints: ExecutionConstraints = dspy.InputField()
     tool_catalog: ToolCatalog = dspy.InputField(
         desc="Catalog of available tools organized by category"
     )
@@ -109,7 +112,8 @@ class GraphWeaver(dspy.Module):
                 self.progress_fn("weave_attempt", "  Draft rejected: cycle detected")
                 return 0.0
             # Quality validation
-            score = topology_eval(goal=args.get("goal", ""), topology_json=topo.model_dump_json())
+            goal = args.get("goal", PentestGoal(objective="Evaluate pentest topology"))
+            score = topology_eval(goal=goal, topology_json=topo.model_dump_json())
             self.progress_fn("weave_eval", f"  Draft topology quality score: {score:.2f}")
             return score
 
@@ -123,11 +127,24 @@ class GraphWeaver(dspy.Module):
         else:
             self.weave = base_weave
 
-    def forward(self, goal: str, progress_fn: Callable | None = None, **kwargs) -> dspy.Prediction:
+    def forward(
+        self, goal: PentestGoal | str, progress_fn: Callable | None = None, **kwargs
+    ) -> dspy.Prediction:
         if progress_fn:
             self.progress_fn = progress_fn
+        goal_spec = goal if isinstance(goal, PentestGoal) else PentestGoal.from_text(goal)
+
+        if "target_info" in kwargs and "target_spec" not in kwargs:
+            kwargs["target_spec"] = TargetSpec.from_raw(str(kwargs.pop("target_info")))
+        if "constraints_text" in kwargs and "constraints" not in kwargs:
+            kwargs["constraints"] = ExecutionConstraints.from_text(
+                rules_of_engagement=str(kwargs.pop("constraints_text")),
+                scan_mode=kwargs.get("mode", ScanMode.RECON),
+                max_graph_nodes=self.max_nodes,
+            )
+
         with dspy.settings.context(temperature=0.1):
-            return self.weave(goal=goal, **kwargs)
+            return self.weave(goal=goal_spec, **kwargs)
 
 
 def build_default_topology(mode: ScanMode) -> GraphTopology | None:
@@ -145,7 +162,7 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
             role=NodeRole.REACT,
             name="Reconnaissance",
             description="Discover all hosts, ports, services, and technologies on the target.",
-            inputs=["target"],
+            inputs=["target_spec"],
             output="recon_results",
             depends_on=[],
             tools=[],
@@ -234,5 +251,5 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
         objective=objective,
         nodes=nodes,
         edges=edges,
-        runtime_inputs=["target"],
+        runtime_inputs=["target_spec"],
     )

@@ -8,7 +8,7 @@ from typing import Any
 
 import dspy
 
-from spider.schemas import ReconResults
+from spider.schemas import ReconResults, TargetSpec
 
 
 class ReconSignature(dspy.Signature):
@@ -21,7 +21,7 @@ class ReconSignature(dspy.Signature):
     CRITICAL: Your final answer MUST be valid JSON matching the ReconResults schema.
     No conversational text. No preambles. Just the data."""
 
-    target: str = dspy.InputField(desc="Target IP or hostname to scan")
+    target_spec: TargetSpec = dspy.InputField(desc="Authorized target descriptor to scan")
     recon_results: ReconResults = dspy.OutputField()
 
 
@@ -63,6 +63,6 @@ class ReconModule(dspy.Module):
             self.agent = base
 
     def forward(self, **kwargs):
-        target = kwargs.get("target", "")
+        target_spec = kwargs.get("target_spec")
         with dspy.settings.context(temperature=0.1):
-            return self.agent(target=target)
+            return self.agent(target_spec=target_spec)
