@@ -272,6 +272,50 @@ def test_node_factory_uses_full_reporter_for_attack_plan_contract(config):
     assert isinstance(modules["reporter"], ReporterModule)
 
 
+@pytest.mark.parametrize("mode", [ScanMode.FULL, ScanMode.CUSTOM])
+def test_node_factory_preserves_full_reporter_for_full_modes_without_attack_plan_contract(
+    config, mode
+):
+    """FULL/CUSTOM mode must not silently downgrade malformed reporter contracts."""
+    from spider.engine.node_factory import build_node_modules
+    from spider.nodes.reporter import ReporterModule
+    from spider.schemas import GraphTopology, NodeDef, NodeRole
+
+    topology = GraphTopology(
+        name="malformed_full_report",
+        objective="Full report",
+        nodes=[
+            NodeDef(
+                id="exploit_planner",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Exploit Planner",
+                description="Build attack plan",
+                inputs=["vulnerabilities"],
+                output="attack_plan",
+            ),
+            NodeDef(
+                id="reporter",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Reporter",
+                description="Generate report",
+                inputs=["recon_results", "vulnerabilities"],
+                output="report",
+            ),
+        ],
+        edges=[],
+        runtime_inputs=["recon_results", "vulnerabilities"],
+    )
+
+    modules = build_node_modules(
+        topology=topology,
+        tools={},
+        config=config,
+        scan_mode=mode,
+    )
+
+    assert isinstance(modules["reporter"], ReporterModule)
+
+
 # ── Topology Post-Filter Tests ────────────────────────────────────────────────
 
 

@@ -139,7 +139,11 @@ def _resolve_module(
     for pattern, class_name, needs_hitl in _REGISTRY:
         if pattern in lower:
             if class_name == "ReporterModule":
-                if scan_mode == ScanMode.RECON or "attack_plan" not in node_inputs:
+                if scan_mode == ScanMode.RECON:
+                    return classes["ReconReporterModule"](tools=node_tools, config=config)
+                if scan_mode in (ScanMode.FULL, ScanMode.CUSTOM):
+                    return classes["ReporterModule"](tools=node_tools, config=config)
+                if "attack_plan" not in node_inputs:
                     return classes["ReconReporterModule"](tools=node_tools, config=config)
                 return classes["ReporterModule"](tools=node_tools, config=config)
 
