@@ -1,0 +1,10 @@
+# Require maintainer review for safety-sensitive surfaces.
+/.github/                 @Dan-StrategicAutomation
+/pyproject.toml           @Dan-StrategicAutomation
+/uv.lock                  @Dan-StrategicAutomation
+/src/spider/engine/       @Dan-StrategicAutomation
+/src/spider/nodes/        @Dan-StrategicAutomation
+/src/spider/sandbox/      @Dan-StrategicAutomation
+/src/spider/tools/        @Dan-StrategicAutomation
+/src/spider/intelligence/ @Dan-StrategicAutomation
+/lab/                     @Dan-StrategicAutomation

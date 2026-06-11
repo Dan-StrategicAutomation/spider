@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability report
+    url: https://github.com/Dan-StrategicAutomation/spider/security/policy
+    about: Please report vulnerabilities privately using SECURITY.md.
+  - name: Questions and ideas
+    url: https://github.com/Dan-StrategicAutomation/spider/discussions
+    about: Use Discussions for support questions and design ideas.

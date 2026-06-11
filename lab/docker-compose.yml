@@ -1,0 +1,61 @@
+version: "3.8"
+
+# SPIDER Test Lab -- Docker Compose for safe penetration testing
+# All targets are deliberately vulnerable for educational purposes
+# Network is INTERNAL -- no external internet access
+
+services:
+  # Damn Vulnerable Web Application (DVWA)
+  dvwa:
+    image: vulnerables/web-dvwa
+    container_name: spider-dvwa
+    restart: unless-stopped
+    networks:
+      pentest_lab:
+        ipv4_address: 172.20.0.10
+    # DVWA default credentials: admin / password
+
+  # OWASP Juice Shop (modern vulnerable web app)
+  juice_shop:
+    image: bkimminich/juice-shop
+    container_name: spider-juice-shop
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      pentest_lab:
+        ipv4_address: 172.20.0.11
+
+  # Metasploitable2 (vulnerable Linux with many services)
+  metasploitable2:
+    image: tleemcjr/metasploitable2
+    container_name: spider-metasploitable2
+    restart: unless-stopped
+    # Many vulnerable services exposed (FTP, SSH, Telnet, etc.)
+    networks:
+      pentest_lab:
+        ipv4_address: 172.20.0.12
+
+  # SPIDER (optional -- runs the framework inside the lab network)
+  # spider:
+  #   build:
+  #     context: ./kali-tools
+  #     dockerfile: Dockerfile
+  #   container_name: spider-runner
+  #   restart: "no"
+  #   networks:
+  #     pentest_lab:
+  #       ipv4_address: 172.20.0.50
+  #   # Environment variables for SPIDER configuration
+  #   environment:
+  #     - SPIDER_ALLOWED_TARGETS=172.20.0.0/24
+  #     - SPIDER_OLLAMA_BASE_URL=http://host.docker.internal:11434
+  #   # Ollama runs on the host machine, accessible from the container
+
+networks:
+  pentest_lab:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+    internal: true  # No external internet access -- safety isolation
