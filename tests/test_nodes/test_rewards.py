@@ -6,41 +6,38 @@ from spider.engine.self_eval import VulnAnalysisReward, WebEnumerationReward
 from spider.schemas import (
     CVEFinding,
     DirectoryEntry,
+    QualityScore,
     ReconResults,
-    RewardEvaluation,
     ServiceDetails,
     TechInfo,
     VulnerabilityInfo,
     VulnerabilityList,
-    VulnerabilityRewardContext,
-    WebEnumerationRewardContext,
     WebFindings,
     WebParamInfo,
 )
 
 
 class RecordingJudge(dspy.Module):
-    """Mock DSPy judge returning a fixed structured reward evaluation."""
+    """Mock DSPy judge returning a fixed structured quality evaluation."""
 
-    def __init__(self, evaluation: RewardEvaluation):
+    def __init__(self, evaluation: QualityScore):
         super().__init__()
         self.evaluation = evaluation
-        self.context = None
+        self.kwargs = None
 
-    def forward(self, context):
-        self.context = context
+    def forward(self, **kwargs):
+        self.kwargs = kwargs
         return dspy.Prediction(evaluation=self.evaluation)
 
 
 def test_vulnerability_reward_accepts_empty_result_when_tools_support_no_findings():
     """An empty VulnerabilityList can pass when DSPy judge validates no-finding evidence."""
     judge = RecordingJudge(
-        RewardEvaluation(
+        QualityScore(
             score=0.86,
-            evidence_present=True,
-            no_findings_supported=True,
-            unsupported_cves_absent=True,
-            rationale="Scanner and CVE intelligence output support no findings.",
+            reasoning="Scanner and CVE intelligence output support no findings.",
+            issues=[],
+            improvements=[],
         )
     )
     service_details = ServiceDetails(
@@ -61,21 +58,18 @@ def test_vulnerability_reward_accepts_empty_result_when_tools_support_no_finding
     )
 
     assert score == 0.86
-    assert isinstance(judge.context, VulnerabilityRewardContext)
-    assert judge.context.vulnerabilities.vulnerabilities == []
-    assert judge.context.service_details.service_name == "nginx"
+    assert judge.kwargs["vulnerabilities"].vulnerabilities == []
+    assert judge.kwargs["service_details"].service_name == "nginx"
 
 
 def test_vulnerability_reward_accepts_grounded_non_empty_result():
     """A non-empty finding can pass when DSPy judge validates grounding and consistency."""
     judge = RecordingJudge(
-        RewardEvaluation(
+        QualityScore(
             score=0.94,
-            evidence_present=True,
-            cve_or_source_references_present=True,
-            service_details_consistent=True,
-            unsupported_cves_absent=True,
-            rationale="CVE and NVD source match Apache 2.4.49 service evidence.",
+            reasoning="CVE and NVD source match Apache 2.4.49 service evidence.",
+            issues=[],
+            improvements=[],
         )
     )
     service_details = ServiceDetails(
@@ -110,21 +104,18 @@ def test_vulnerability_reward_accepts_grounded_non_empty_result():
     )
 
     assert score == 0.94
-    assert isinstance(judge.context, VulnerabilityRewardContext)
-    assert judge.context.vulnerabilities.vulnerabilities[0].cve.cve_id == "CVE-2021-41773"
-    assert judge.context.service_details.version == "2.4.49"
+    assert judge.kwargs["vulnerabilities"].vulnerabilities[0].cve.cve_id == "CVE-2021-41773"
+    assert judge.kwargs["service_details"].version == "2.4.49"
 
 
 def test_vulnerability_reward_uses_judge_to_penalize_unsupported_cve():
     """Unsupported CVEs should not pass purely because the list is non-empty."""
     judge = RecordingJudge(
-        RewardEvaluation(
+        QualityScore(
             score=0.18,
-            evidence_present=True,
-            cve_or_source_references_present=False,
-            service_details_consistent=False,
-            unsupported_cves_absent=False,
-            rationale="The reported CVE is not supported by tool evidence.",
+            reasoning="The reported CVE is not supported by tool evidence.",
+            issues=["unsupported CVE"],
+            improvements=["Remove unsupported CVE or cite a matching source."],
         )
     )
     service_details = ServiceDetails(
@@ -149,17 +140,17 @@ def test_vulnerability_reward_uses_judge_to_penalize_unsupported_cve():
     )
 
     assert score == 0.18
-    assert isinstance(judge.context, VulnerabilityRewardContext)
+    assert judge.kwargs["service_details"].service_name == "nginx"
 
 
 def test_web_enumeration_reward_accepts_empty_result_when_evidence_supports_absence():
     """Empty web findings can pass when DSPy judge validates absence of web findings."""
     judge = RecordingJudge(
-        RewardEvaluation(
+        QualityScore(
             score=0.82,
-            evidence_present=True,
-            no_findings_supported=True,
-            rationale="Recon found no web service and HTTP probe found no web content.",
+            reasoning="Recon found no web service and HTTP probe found no web content.",
+            issues=[],
+            improvements=[],
         )
     )
     recon_results = ReconResults(raw_output="tcp/22 OpenSSH only; no web service detected")
@@ -170,18 +161,17 @@ def test_web_enumeration_reward_accepts_empty_result_when_evidence_supports_abse
     score = WebEnumerationReward(judge=judge)({"recon_results": recon_results}, pred)
 
     assert score == 0.82
-    assert isinstance(judge.context, WebEnumerationRewardContext)
-    assert judge.context.web_findings.directories == []
+    assert judge.kwargs["web_findings"].directories == []
 
 
 def test_web_enumeration_reward_accepts_grounded_non_empty_result():
     """Structured web findings can pass when DSPy judge validates field grounding."""
     judge = RecordingJudge(
-        RewardEvaluation(
+        QualityScore(
             score=0.91,
-            evidence_present=True,
-            cve_or_source_references_present=True,
-            rationale="Directory, parameter, technology, and vulnerability notes are grounded.",
+            reasoning="Directory, parameter, technology, and vulnerability notes are grounded.",
+            issues=[],
+            improvements=[],
         )
     )
     recon_results = ReconResults(raw_output="port 80 http open")
@@ -201,5 +191,4 @@ def test_web_enumeration_reward_accepts_grounded_non_empty_result():
     score = WebEnumerationReward(judge=judge)({"recon_results": recon_results}, pred)
 
     assert score == 0.91
-    assert isinstance(judge.context, WebEnumerationRewardContext)
-    assert judge.context.web_findings.directories[0].path == "/admin"
+    assert judge.kwargs["web_findings"].directories[0].path == "/admin"

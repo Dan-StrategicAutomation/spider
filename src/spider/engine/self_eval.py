@@ -10,11 +10,8 @@ import dspy
 from spider.schemas import (
     QualityScore,
     ReconResults,
-    RewardEvaluation,
     ServiceDetails,
     VulnerabilityList,
-    VulnerabilityRewardContext,
-    WebEnumerationRewardContext,
     WebFindings,
 )
 
@@ -37,26 +34,28 @@ class SelfEvalSignature(dspy.Signature):
 class VulnerabilityRewardSignature(dspy.Signature):
     """Evaluate vulnerability analysis as a Refine reward.
 
-    Score the submitted VulnerabilityList against tool evidence in the web findings and service
-    details. A non-empty list should be grounded in evidence, cite CVEs or credible sources, match
-    the service name/version when available, and avoid unsupported CVEs. An empty list can receive a
-    passing score when tool or intelligence evidence supports no vulnerability findings.
+    Score the submitted vulnerabilities against web and service evidence. Reward evidence presence,
+    CVE/source references, consistency with service_details, absence of unsupported CVEs, and
+    evidence-backed empty VulnerabilityList outputs when tools support no vulnerability findings.
     """
 
-    context: VulnerabilityRewardContext = dspy.InputField()
-    evaluation: RewardEvaluation = dspy.OutputField()
+    web_findings: WebFindings = dspy.InputField()
+    service_details: ServiceDetails = dspy.InputField()
+    vulnerabilities: VulnerabilityList = dspy.InputField()
+    evaluation: QualityScore = dspy.OutputField()
 
 
 class WebEnumerationRewardSignature(dspy.Signature):
     """Evaluate web enumeration as a Refine reward.
 
-    Score the submitted WebFindings against recon and enumeration evidence. Reward grounded
-    directories, parameters, technologies, potential vulnerability notes, and an evidence-backed
-    empty result when probing found no web surface or no web findings.
+    Score submitted web findings against recon evidence. Reward grounded directories, parameters,
+    technologies, potential vulnerability notes, and evidence-backed empty results when probing
+    found no web surface or no web findings.
     """
 
-    context: WebEnumerationRewardContext = dspy.InputField()
-    evaluation: RewardEvaluation = dspy.OutputField()
+    recon_results: ReconResults = dspy.InputField()
+    web_findings: WebFindings = dspy.InputField()
+    evaluation: QualityScore = dspy.OutputField()
 
 
 class SelfEvaluator(dspy.Module):
@@ -123,12 +122,11 @@ class VulnAnalysisReward:
         if not isinstance(service_details, ServiceDetails):
             service_details = ServiceDetails()
 
-        context = VulnerabilityRewardContext(
+        result = self.judge(
             web_findings=web_findings,
             service_details=service_details,
             vulnerabilities=vulnerabilities,
         )
-        result = self.judge(context=context)
         return _reward_score(result)
 
 
@@ -147,21 +145,12 @@ class WebEnumerationReward:
         if not isinstance(recon_results, ReconResults):
             recon_results = ReconResults()
 
-        context = WebEnumerationRewardContext(
-            recon_results=recon_results,
-            web_findings=web_findings,
-        )
-        result = self.judge(context=context)
+        result = self.judge(recon_results=recon_results, web_findings=web_findings)
         return _reward_score(result)
 
 
 def _reward_score(result: dspy.Prediction) -> float:
-    evaluation = getattr(result, "evaluation", None)
-    if isinstance(evaluation, RewardEvaluation):
-        return float(evaluation.score)
-    if isinstance(evaluation, dict):
-        return float(RewardEvaluation.model_validate(evaluation).score)
-    return 0.0
+    return float(QualityScore.wrap(getattr(result, "evaluation", 0.0)).score)
 
 
 class ExploitPlanReward:

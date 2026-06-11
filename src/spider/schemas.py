@@ -194,36 +194,6 @@ class VulnerabilityList(BaseModel):
         return str(v)
 
 
-# ── Reward Evaluation Schemas ─────────────────────────────────────────────────
-
-
-class VulnerabilityRewardContext(BaseModel):
-    """Inputs for DSPy vulnerability reward evaluation."""
-
-    web_findings: WebFindings = Field(default_factory=WebFindings)
-    service_details: ServiceDetails = Field(default_factory=ServiceDetails)
-    vulnerabilities: VulnerabilityList = Field(default_factory=VulnerabilityList)
-
-
-class WebEnumerationRewardContext(BaseModel):
-    """Inputs for DSPy web enumeration reward evaluation."""
-
-    recon_results: ReconResults = Field(default_factory=ReconResults)
-    web_findings: WebFindings = Field(default_factory=WebFindings)
-
-
-class RewardEvaluation(BaseModel):
-    """Structured score and rubric fields returned by DSPy reward judges."""
-
-    score: float = Field(ge=0.0, le=1.0, default=0.0)
-    evidence_present: bool = False
-    no_findings_supported: bool = False
-    cve_or_source_references_present: bool = False
-    service_details_consistent: bool = False
-    unsupported_cves_absent: bool = True
-    rationale: str = ""
-
-
 # ── Exploit Planning Schemas ─────────────────────────────────────────────────
 
 
