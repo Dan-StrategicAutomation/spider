@@ -225,9 +225,18 @@ authorization.
 
 ## Development
 
-Use `uv` for project commands.
+Use `uv` for project commands. For the fastest safe CLI feedback loop, use the
+smoke target; it only checks command loading and mocked CLI tests, so it does not
+start a scan or contact external targets.
 
 ```bash
+# Fast safe CLI smoke check
+make smoke
+
+# Equivalent commands when make is unavailable
+uv run spider --help
+uv run --extra dev python -m pytest tests/test_cli.py -q
+
 # Run the full test suite
 uv run pytest tests/ -q
 
