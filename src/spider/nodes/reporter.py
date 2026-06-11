@@ -11,6 +11,19 @@ import dspy
 from spider.schemas import AttackPlan, PentestReport, ReconResults, VulnerabilityList
 
 
+class ReconReporterSignature(dspy.Signature):
+    """Generate a reconnaissance report from recon and vulnerability findings. Include:
+    - Executive summary with overall risk rating
+    - Discovered hosts, services, technologies, and exposures
+    - Technical findings with CVSS scores where available
+    - Remediation recommendations
+    - Methodology and timeline."""
+
+    recon_results: ReconResults = dspy.InputField()
+    vulnerabilities: VulnerabilityList = dspy.InputField()
+    report: PentestReport = dspy.OutputField()
+
+
 class ReporterSignature(dspy.Signature):
     """Generate a comprehensive pentest report. Include:
     - Executive summary with overall risk rating
@@ -25,8 +38,29 @@ class ReporterSignature(dspy.Signature):
     report: PentestReport = dspy.OutputField()
 
 
+class ReconReporterModule(dspy.Module):
+    """Reconnaissance report generation module."""
+
+    def __init__(self, tools: list[dspy.Tool] | None = None, config: Any | None = None, **kwargs):
+        super().__init__()
+        self.config = config
+        # Optimized: Predict is significantly more token-efficient for large analytical outputs
+        self.generator = dspy.Predict(ReconReporterSignature)
+
+    def forward(
+        self,
+        recon_results: ReconResults,
+        vulnerabilities: VulnerabilityList,
+    ) -> dspy.Prediction:
+        with dspy.settings.context(temperature=0.1):
+            return self.generator(
+                recon_results=recon_results,
+                vulnerabilities=vulnerabilities,
+            )
+
+
 class ReporterModule(dspy.Module):
-    """Report generation module."""
+    """Full pentest report generation module."""
 
     def __init__(self, tools: list[dspy.Tool] | None = None, config: Any | None = None, **kwargs):
         super().__init__()

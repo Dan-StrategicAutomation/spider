@@ -84,6 +84,7 @@ class SpiderOrchestrator:
         self,
         topology: GraphTopology,
         tools: dict[str, dspy.Tool],
+        mode: ScanMode | None = None,
     ) -> dict[str, dspy.Module]:
         """Build DSPy modules for each node in the topology."""
         return build_node_modules(
@@ -92,6 +93,7 @@ class SpiderOrchestrator:
             config=self.config,
             hitl_gate=self.hitl_gate,
             progress_fn=self.progress_fn,
+            scan_mode=mode,
         )
 
     def _load_compiled_module(self, module: dspy.Module) -> None:
@@ -184,7 +186,7 @@ class SpiderOrchestrator:
 
         # Phase 3: Build node modules with topology + tools
         self.progress_fn("build", f"Building {len(topology.nodes)} DSPy node modules...")
-        node_modules = self._build_node_modules(topology, tools)
+        node_modules = self._build_node_modules(topology, tools, mode=mode)
         self.progress_fn("build_done", "Node modules ready")
 
         # Phase 4: Execute via GraphRunner
@@ -295,7 +297,7 @@ class SpiderOrchestrator:
                     progress_fn=self.progress_fn,
                 )
                 new_topology = filter_topology_for_mode(new_prediction.topology, mode)
-                new_modules = self._build_node_modules(new_topology, tools)
+                new_modules = self._build_node_modules(new_topology, tools, mode=mode)
                 runner = GraphRunner(
                     topology=new_topology,
                     node_modules=new_modules,

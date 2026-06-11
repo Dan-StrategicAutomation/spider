@@ -171,6 +171,151 @@ def test_default_topology_recon_has_reporting():
     assert "report" in outputs
 
 
+def test_reporter_signatures_have_mode_specific_inputs():
+    """Reporter signatures must reflect RECON and FULL mode contracts."""
+    from spider.nodes.reporter import ReconReporterSignature, ReporterSignature
+
+    assert set(ReconReporterSignature.input_fields) == {"recon_results", "vulnerabilities"}
+    assert set(ReporterSignature.input_fields) == {
+        "recon_results",
+        "vulnerabilities",
+        "attack_plan",
+    }
+
+
+def test_node_factory_uses_recon_reporter_for_recon_contract(config):
+    """Reporter node without attack_plan input uses the recon reporter module."""
+    from spider.engine.node_factory import build_node_modules
+    from spider.nodes.reporter import ReconReporterModule
+    from spider.schemas import GraphTopology, NodeDef, NodeRole
+
+    topology = GraphTopology(
+        name="recon_report",
+        objective="Recon report",
+        nodes=[
+            NodeDef(
+                id="reporter",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Reporter",
+                description="Generate report",
+                inputs=["recon_results", "vulnerabilities"],
+                output="report",
+            )
+        ],
+        edges=[],
+        runtime_inputs=["recon_results", "vulnerabilities"],
+    )
+
+    modules = build_node_modules(topology=topology, tools={}, config=config)
+
+    assert isinstance(modules["reporter"], ReconReporterModule)
+
+
+def test_node_factory_uses_recon_reporter_for_explicit_recon_mode(config):
+    """Explicit RECON mode uses the recon reporter even if stale inputs mention attack_plan."""
+    from spider.engine.node_factory import build_node_modules
+    from spider.nodes.reporter import ReconReporterModule
+    from spider.schemas import GraphTopology, NodeDef, NodeRole
+
+    topology = GraphTopology(
+        name="filtered_recon_report",
+        objective="Recon report",
+        nodes=[
+            NodeDef(
+                id="reporter",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Reporter",
+                description="Generate report",
+                inputs=["recon_results", "vulnerabilities", "attack_plan"],
+                output="report",
+            )
+        ],
+        edges=[],
+        runtime_inputs=["recon_results", "vulnerabilities", "attack_plan"],
+    )
+
+    modules = build_node_modules(
+        topology=topology,
+        tools={},
+        config=config,
+        scan_mode=ScanMode.RECON,
+    )
+
+    assert isinstance(modules["reporter"], ReconReporterModule)
+
+
+def test_node_factory_uses_full_reporter_for_attack_plan_contract(config):
+    """Reporter node with attack_plan input uses the full reporter module."""
+    from spider.engine.node_factory import build_node_modules
+    from spider.nodes.reporter import ReporterModule
+    from spider.schemas import GraphTopology, NodeDef, NodeRole
+
+    topology = GraphTopology(
+        name="full_report",
+        objective="Full report",
+        nodes=[
+            NodeDef(
+                id="reporter",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Reporter",
+                description="Generate report",
+                inputs=["recon_results", "vulnerabilities", "attack_plan"],
+                output="report",
+            )
+        ],
+        edges=[],
+        runtime_inputs=["recon_results", "vulnerabilities", "attack_plan"],
+    )
+
+    modules = build_node_modules(topology=topology, tools={}, config=config)
+
+    assert isinstance(modules["reporter"], ReporterModule)
+
+
+@pytest.mark.parametrize("mode", [ScanMode.FULL, ScanMode.CUSTOM])
+def test_node_factory_preserves_full_reporter_for_full_modes_without_attack_plan_contract(
+    config, mode
+):
+    """FULL/CUSTOM mode must not silently downgrade malformed reporter contracts."""
+    from spider.engine.node_factory import build_node_modules
+    from spider.nodes.reporter import ReporterModule
+    from spider.schemas import GraphTopology, NodeDef, NodeRole
+
+    topology = GraphTopology(
+        name="malformed_full_report",
+        objective="Full report",
+        nodes=[
+            NodeDef(
+                id="exploit_planner",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Exploit Planner",
+                description="Build attack plan",
+                inputs=["vulnerabilities"],
+                output="attack_plan",
+            ),
+            NodeDef(
+                id="reporter",
+                role=NodeRole.CHAIN_OF_THOUGHT,
+                name="Reporter",
+                description="Generate report",
+                inputs=["recon_results", "vulnerabilities"],
+                output="report",
+            ),
+        ],
+        edges=[],
+        runtime_inputs=["recon_results", "vulnerabilities"],
+    )
+
+    modules = build_node_modules(
+        topology=topology,
+        tools={},
+        config=config,
+        scan_mode=mode,
+    )
+
+    assert isinstance(modules["reporter"], ReporterModule)
+
+
 # ── Topology Post-Filter Tests ────────────────────────────────────────────────
 
 
