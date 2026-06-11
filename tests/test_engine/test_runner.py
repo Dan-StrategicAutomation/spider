@@ -3,7 +3,7 @@
 import dspy
 
 from spider.engine.runner import GraphRunner
-from spider.schemas import GraphTopology, NodeDef, NodeRole, ReconResults, TargetSpec, WebFindings
+from spider.schemas import GraphTopology, NodeDef, NodeKind, NodeRole, ReconResults, TargetSpec, WebFindings
 
 
 class RequiresReconSignature(dspy.Signature):
@@ -30,6 +30,7 @@ def test_runner_fails_wave_when_declared_upstream_output_is_missing():
     """Missing upstream outputs must fail the wave instead of using an empty model."""
     node = NodeDef(
         id="web_enum",
+        kind=NodeKind.WEB_ENUM,
         role=NodeRole.CHAIN_OF_THOUGHT,
         name="Web Enumeration",
         description="Enumerate web findings from recon data.",
@@ -85,6 +86,7 @@ def test_runner_normalizes_legacy_target_runtime_input_to_target_spec():
     """Legacy runtime target strings should be supplied to modules as TargetSpec."""
     node = NodeDef(
         id="recon",
+        kind=NodeKind.RECON,
         role=NodeRole.REACT,
         name="Recon",
         description="Run recon from a structured target spec.",
