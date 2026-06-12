@@ -16,10 +16,17 @@ from spider.engine.mode_filter import filter_topology_for_mode
 from spider.engine.node_factory import build_node_modules
 from spider.engine.runner import GraphRunner
 from spider.engine.tool_registry import build_tool_catalog, build_tools
-from spider.engine.weaver import GraphTopology, GraphWeaver, validate_topology_contract
+from spider.engine.weaver import GraphWeaver, build_default_topology, validate_topology_contract
 from spider.sandbox.hitl_gate import HITLGate
 from spider.sandbox.scope_guard import ScopeGuard
-from spider.schemas import ExecutionConstraints, PentestGoal, ScanMode, TargetSpec
+from spider.schemas import (
+    ExecutionConstraints,
+    GraphTopology,
+    PentestGoal,
+    ScanMode,
+    TargetSpec,
+    ToolCatalog,
+)
 from spider.tui.session import SessionStore
 
 
@@ -27,7 +34,7 @@ class SpiderOrchestrator:
     """Top-level SPIDER orchestrator.
 
     Pipeline:
-    1. Weaver generates topology from goal text
+    1. Select a deterministic or DSPy-woven topology
     2. Tools are provisioned for each node
     3. Runner executes topology in parallel waves
     4. Quality evaluator checks output quality
@@ -96,6 +103,34 @@ class SpiderOrchestrator:
             scan_mode=mode,
         )
 
+    def _select_topology(
+        self,
+        mode: ScanMode,
+        goal: PentestGoal,
+        target_spec: TargetSpec,
+        constraints: ExecutionConstraints,
+        tool_catalog: ToolCatalog,
+    ) -> GraphTopology:
+        """Select a topology, using deterministic defaults before LLM weaving."""
+        default_topology = build_default_topology(mode)
+        if default_topology is not None:
+            self.progress_fn(
+                "topology_default",
+                f"Using deterministic {mode.value} topology",
+            )
+            return default_topology
+
+        self.progress_fn("weave", "Generating custom attack topology with DSPy weaver...")
+        with dspy.settings.context(temperature=0.1):
+            prediction = self.weaver(
+                goal=goal,
+                target_spec=target_spec,
+                constraints=constraints,
+                tool_catalog=tool_catalog,
+                progress_fn=self.progress_fn,
+            )
+        return prediction.topology
+
     def _load_compiled_module(self, module: dspy.Module) -> None:
         """Attempt to load BootstrapFewShot optimized weights for a module."""
         module_name = module.__class__.__name__
@@ -158,23 +193,21 @@ class SpiderOrchestrator:
                     "target": target_spec.target,
                 }
 
-        # Phase 1: Weave topology from goal and target
-        self.progress_fn("weave", "Generating attack topology with DSPy weaver...")
+        # Phase 1: Select topology from deterministic defaults or custom DSPy weaving
         tools = self._build_tools(
             mode=mode,
             scope_guard=self.scope_guard,
             audit_logger=self.audit_logger,
         )
         tool_catalog = build_tool_catalog(set(tools.keys()), mode)
-        with dspy.settings.context(temperature=0.1):
-            prediction = self.weaver(
-                goal=goal_spec,
-                target_spec=target_spec,
-                constraints=constraints,
-                tool_catalog=tool_catalog,
-                progress_fn=self.progress_fn,
-            )
-            topology = filter_topology_for_mode(prediction.topology, mode)
+        topology = self._select_topology(
+            mode=mode,
+            goal=goal_spec,
+            target_spec=target_spec,
+            constraints=constraints,
+            tool_catalog=tool_catalog,
+        )
+        topology = filter_topology_for_mode(topology, mode)
         topology_issues = validate_topology_contract(topology, mode)
         if topology_issues:
             return {
@@ -184,8 +217,8 @@ class SpiderOrchestrator:
                 "target": target_spec.target,
             }
         self.progress_fn(
-            "weave_done",
-            f"Topology woven: {len(topology.nodes)} nodes, {len(topology.edges)} edges",
+            "topology_done",
+            f"Topology ready: {len(topology.nodes)} nodes, {len(topology.edges)} edges",
         )
 
         # Phase 2: Provision tools
