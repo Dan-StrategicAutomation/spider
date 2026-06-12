@@ -138,6 +138,20 @@ class SpiderConfig(BaseSettings):
         description="Maximum nodes in a generated topology",
     )
 
+    # Topology Selection
+    topology_name: str = Field(
+        default="auto",
+        validation_alias=AliasChoices("SPIDER_TOPOLOGY_NAME", "TOPOLOGY_NAME", "SPIDER_TOPOLOGY"),
+        description=(
+            "Topology selector: auto, recon, full, weave, or a saved topology JSON name/path"
+        ),
+    )
+    topology_dir: str = Field(
+        default="~/.spider/topologies",
+        validation_alias=AliasChoices("SPIDER_TOPOLOGY_DIR", "TOPOLOGY_DIR"),
+        description="Directory containing user-saved topology JSON files",
+    )
+
     # Intelligence API Configuration
     nvd_api_key: str = Field(
         default="",

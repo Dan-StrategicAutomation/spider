@@ -152,12 +152,25 @@ def test_default_topology_recon_has_no_exploit_planner():
     assert "attack_plan" not in outputs
 
 
-def test_default_topology_full_has_exploit_planner():
-    """FULL default topology must include exploit_planner node."""
+def test_default_topology_full_has_complete_exploitation_chain():
+    """FULL default topology must include HITL-gated exploitation and post-exploitation."""
     topo = build_default_topology(ScanMode.FULL)
     assert topo is not None
-    node_ids = {n.id for n in topo.nodes}
-    assert "exploit_planner" in node_ids
+    nodes_by_id = {n.id: n for n in topo.nodes}
+
+    assert "exploit_planner" in nodes_by_id
+    assert "exploit_execution" in nodes_by_id
+    assert "post_exploitation" in nodes_by_id
+
+    exploit_execution = nodes_by_id["exploit_execution"]
+    assert exploit_execution.inputs == ["attack_plan", "target_spec"]
+    assert exploit_execution.output == "exploit_result"
+    assert exploit_execution.depends_on == ["exploit_planner"]
+
+    post_exploitation = nodes_by_id["post_exploitation"]
+    assert post_exploitation.inputs == ["exploit_result", "target_spec"]
+    assert post_exploitation.output == "post_exploit_result"
+    assert post_exploitation.depends_on == ["exploit_execution"]
 
 
 def test_default_topology_custom_returns_none():

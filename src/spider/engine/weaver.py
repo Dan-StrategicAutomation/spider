@@ -317,20 +317,46 @@ def build_default_topology(mode: ScanMode) -> GraphTopology | None:
         ),
     ]
 
-    # Exploitation node only in FULL mode
+    # Full mode preserves the complete HITL-gated penetration-test chain.
     if mode == ScanMode.FULL:
-        nodes.append(
-            NodeDef(
-                id="exploit_planner",
-                kind=NodeKind.EXPLOIT_PLANNING,
-                role=NodeRole.CHAIN_OF_THOUGHT,
-                name="Exploit Planning",
-                description="Build multi-step attack chains from discovered vulnerabilities.",
-                inputs=["vulnerabilities"],
-                output="attack_plan",
-                depends_on=["vuln_analysis"],
-                tools=[],
-            )
+        nodes.extend(
+            [
+                NodeDef(
+                    id="exploit_planner",
+                    kind=NodeKind.EXPLOIT_PLANNING,
+                    role=NodeRole.CHAIN_OF_THOUGHT,
+                    name="Exploit Planning",
+                    description="Build multi-step attack chains from discovered vulnerabilities.",
+                    inputs=["vulnerabilities"],
+                    output="attack_plan",
+                    depends_on=["vuln_analysis"],
+                    tools=[],
+                ),
+                NodeDef(
+                    id="exploit_execution",
+                    kind=NodeKind.EXPLOIT_EXECUTION,
+                    role=NodeRole.REACT,
+                    name="Exploit Execution",
+                    description=(
+                        "Execute approved exploitation steps with human approval for every action."
+                    ),
+                    inputs=["attack_plan", "target_spec"],
+                    output="exploit_result",
+                    depends_on=["exploit_planner"],
+                    tools=[],
+                ),
+                NodeDef(
+                    id="post_exploitation",
+                    kind=NodeKind.POST_EXPLOITATION,
+                    role=NodeRole.REACT,
+                    name="Post-Exploitation",
+                    description="Run approved post-exploitation checks after successful access.",
+                    inputs=["exploit_result", "target_spec"],
+                    output="post_exploit_result",
+                    depends_on=["exploit_execution"],
+                    tools=[],
+                ),
+            ]
         )
 
     # Reporter always included — inputs depend on mode
