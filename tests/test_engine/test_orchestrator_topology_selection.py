@@ -136,3 +136,95 @@ def test_recon_run_filters_selected_topology(
     selected_node_ids = {node.id for node in _FakeRunner.instances[0].topology.nodes}
     assert "exploit_planner" not in selected_node_ids
     assert "reporter" in selected_node_ids
+
+
+def test_configured_prebuilt_topology_overrides_scan_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    config: SpiderConfig,
+) -> None:
+    """Users can explicitly select a prebuilt topology instead of auto mode defaults."""
+    config.topology_name = "full"
+    orchestrator = _prepare_orchestrator(monkeypatch, config)
+    orchestrator.weaver = _ForbiddenWeaver()
+
+    result = orchestrator.run(
+        goal="Assess authorized lab target", target="example.com", mode=ScanMode.FULL
+    )
+
+    assert result["mode"] == ScanMode.FULL.value
+    selected_node_ids = {node.id for node in _FakeRunner.instances[0].topology.nodes}
+    assert "exploit_execution" in selected_node_ids
+    assert "post_exploitation" in selected_node_ids
+
+
+def test_saved_topology_selection_loads_from_configured_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    config: SpiderConfig,
+) -> None:
+    """Users can reuse a saved topology JSON by name without invoking the weaver."""
+    saved_topology = build_default_topology(ScanMode.RECON)
+    assert saved_topology is not None
+    saved_topology.name = "saved_recon"
+    (tmp_path / "saved_recon.json").write_text(saved_topology.model_dump_json())
+
+    config.topology_name = "saved_recon"
+    config.topology_dir = str(tmp_path)
+    orchestrator = _prepare_orchestrator(monkeypatch, config)
+    orchestrator.weaver = _ForbiddenWeaver()
+
+    result = orchestrator.run(
+        goal="Assess authorized lab target", target="example.com", mode=ScanMode.RECON
+    )
+
+    assert result["mode"] == ScanMode.RECON.value
+    selected = _FakeRunner.instances[0].topology
+    assert selected.name == "saved_recon"
+    assert validate_topology_contract(selected, ScanMode.RECON) == []
+
+
+def test_topology_name_kwarg_overrides_configured_topology(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    config: SpiderConfig,
+) -> None:
+    """Callers can select a saved topology for one run without mutating config."""
+    saved_topology = build_default_topology(ScanMode.RECON)
+    assert saved_topology is not None
+    saved_topology.name = "one_off_recon"
+    topology_path = tmp_path / "one_off_recon.json"
+    topology_path.write_text(saved_topology.model_dump_json())
+
+    config.topology_name = "weave"
+    orchestrator = _prepare_orchestrator(monkeypatch, config)
+    orchestrator.weaver = _ForbiddenWeaver()
+
+    result = orchestrator.run(
+        goal="Assess authorized lab target",
+        target="example.com",
+        mode=ScanMode.RECON,
+        topology_name=str(topology_path),
+    )
+
+    assert result["mode"] == ScanMode.RECON.value
+    assert _FakeRunner.instances[0].topology.name == "one_off_recon"
+
+
+def test_unknown_saved_topology_returns_selection_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    config: SpiderConfig,
+) -> None:
+    """Unknown topology names fail clearly before graph execution."""
+    config.topology_name = "missing_topology"
+    config.topology_dir = str(tmp_path)
+    orchestrator = _prepare_orchestrator(monkeypatch, config)
+    orchestrator.weaver = _ForbiddenWeaver()
+
+    result = orchestrator.run(
+        goal="Assess authorized lab target", target="example.com", mode=ScanMode.RECON
+    )
+
+    assert result["success"] is False
+    assert str(result["error"]).startswith("TOPOLOGY_SELECTION_ERROR:")
+    assert _FakeRunner.instances == []

@@ -16,6 +16,13 @@ from spider.engine.mode_filter import filter_topology_for_mode
 from spider.engine.node_factory import build_node_modules
 from spider.engine.runner import GraphRunner
 from spider.engine.tool_registry import build_tool_catalog, build_tools
+from spider.engine.topology_library import (
+    TopologySelectionError,
+    is_weaver_topology,
+    load_saved_topology,
+    normalize_topology_name,
+    selected_prebuilt_mode,
+)
 from spider.engine.weaver import GraphWeaver, build_default_topology, validate_topology_contract
 from spider.sandbox.hitl_gate import HITLGate
 from spider.sandbox.scope_guard import ScopeGuard
@@ -110,8 +117,35 @@ class SpiderOrchestrator:
         target_spec: TargetSpec,
         constraints: ExecutionConstraints,
         tool_catalog: ToolCatalog,
+        topology_name: str | None = None,
     ) -> GraphTopology:
-        """Select a topology, using deterministic defaults before LLM weaving."""
+        """Select a prebuilt, saved, or DSPy-woven topology."""
+        raw_selector = (topology_name or self.config.topology_name).strip()
+        selected_name = normalize_topology_name(raw_selector)
+
+        if is_weaver_topology(selected_name):
+            return self._weave_topology(goal, target_spec, constraints, tool_catalog)
+
+        prebuilt_mode = selected_prebuilt_mode(selected_name)
+        if prebuilt_mode is not None:
+            self.progress_fn(
+                "topology_prebuilt",
+                f"Using prebuilt {prebuilt_mode.value} topology",
+            )
+            topology = build_default_topology(prebuilt_mode)
+            if topology is None:
+                raise TopologySelectionError(
+                    f"Prebuilt topology '{prebuilt_mode.value}' is not available."
+                )
+            return topology
+
+        if selected_name != "auto":
+            self.progress_fn(
+                "topology_saved",
+                f"Loading saved topology '{selected_name}'",
+            )
+            return load_saved_topology(raw_selector, self.config.topology_dir)
+
         default_topology = build_default_topology(mode)
         if default_topology is not None:
             self.progress_fn(
@@ -120,6 +154,16 @@ class SpiderOrchestrator:
             )
             return default_topology
 
+        return self._weave_topology(goal, target_spec, constraints, tool_catalog)
+
+    def _weave_topology(
+        self,
+        goal: PentestGoal,
+        target_spec: TargetSpec,
+        constraints: ExecutionConstraints,
+        tool_catalog: ToolCatalog,
+    ) -> GraphTopology:
+        """Generate a topology with the DSPy weaver."""
         self.progress_fn("weave", "Generating custom attack topology with DSPy weaver...")
         with dspy.settings.context(temperature=0.1):
             prediction = self.weaver(
@@ -164,6 +208,7 @@ class SpiderOrchestrator:
             Dictionary with topology, execution results, and session ID.
         """
         mode = kwargs.pop("mode", ScanMode.RECON)
+        topology_name = kwargs.pop("topology_name", None)
         if isinstance(mode, str):
             mode = ScanMode(mode)
         session_id = f"run_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
@@ -200,13 +245,22 @@ class SpiderOrchestrator:
             audit_logger=self.audit_logger,
         )
         tool_catalog = build_tool_catalog(set(tools.keys()), mode)
-        topology = self._select_topology(
-            mode=mode,
-            goal=goal_spec,
-            target_spec=target_spec,
-            constraints=constraints,
-            tool_catalog=tool_catalog,
-        )
+        try:
+            topology = self._select_topology(
+                mode=mode,
+                goal=goal_spec,
+                target_spec=target_spec,
+                constraints=constraints,
+                tool_catalog=tool_catalog,
+                topology_name=topology_name,
+            )
+        except TopologySelectionError as exc:
+            return {
+                "success": False,
+                "error": f"TOPOLOGY_SELECTION_ERROR: {exc}",
+                "session_id": session_id,
+                "target": target_spec.target,
+            }
         topology = filter_topology_for_mode(topology, mode)
         topology_issues = validate_topology_contract(topology, mode)
         if topology_issues:

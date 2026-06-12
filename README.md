@@ -161,6 +161,30 @@ Recon and enumeration may run autonomously when the target is in scope.
 Exploitation, payload delivery, and post-exploitation require explicit human
 approval.
 
+## Topology Selection
+
+By default, SPIDER uses the prebuilt topology for standard `recon` and `full`
+scan modes, and uses the DSPy weaver for `custom` mode. You can override that
+selection with a built-in topology or a user-saved topology JSON:
+
+```bash
+uv run spider --scan example.com --mode full --topology full
+uv run spider --scan example.com --mode recon --topology ~/.spider/topologies/my_recon.json
+```
+
+Supported topology selectors are:
+
+| Selector | Behavior |
+| -------- | -------- |
+| `auto` | Use the mode's default prebuilt topology, or weave for custom mode. |
+| `recon` | Use the prebuilt recon topology. |
+| `full` | Use the prebuilt full topology with HITL-gated exploitation nodes. |
+| `weave` | Force DSPy topology weaving. |
+| saved name/path | Load a `GraphTopology` JSON from `SPIDER_TOPOLOGY_DIR` or an explicit path. |
+
+Saved topology names are resolved from `SPIDER_TOPOLOGY_DIR`, which defaults to
+`~/.spider/topologies`.
+
 ## Architecture
 
 SPIDER executes assessments as a directed acyclic graph of DSPy modules:

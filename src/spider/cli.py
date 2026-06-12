@@ -10,6 +10,7 @@ import questionary
 
 from spider.config import SpiderConfig
 from spider.engine.orchestrator import SpiderOrchestrator
+from spider.engine.topology_library import topology_selector_help
 from spider.models import _ollama_available, configure_spider
 from spider.observability import setup_observability
 from spider.sandbox.audit_logger import AuditLogger
@@ -201,12 +202,19 @@ def _build_goal(mode: ScanMode, target: str, custom_goal: str = "") -> str:
 
 
 def run_scan_noninteractive(
-    session_db, orchestrator, target: str, mode: ScanMode, custom_goal: str = ""
+    session_db,
+    orchestrator,
+    target: str,
+    mode: ScanMode,
+    custom_goal: str = "",
+    topology_name: str | None = None,
 ):
     """Run a single scan non-interactively (used by --scan flag)."""
     divider("NEW SCAN")
     info(f"Target: {target}")
     info(f"Mode: {mode.value}")
+    if topology_name:
+        info(f"Topology: {topology_name}")
 
     # Check if target was scanned before
     past = session_db.find_by_target(target)
@@ -223,7 +231,10 @@ def run_scan_noninteractive(
     info(f"Goal: {goal[:80]}...")
 
     try:
-        result = orchestrator.run(goal=goal, target=target, mode=mode)
+        run_kwargs: dict[str, object] = {"goal": goal, "target": target, "mode": mode}
+        if topology_name and topology_name != "auto":
+            run_kwargs["topology_name"] = topology_name
+        result = orchestrator.run(**run_kwargs)
 
         # Check for orchestrator-level errors (e.g. scope)
         err = result.get("error") if isinstance(result, dict) else None
@@ -318,13 +329,21 @@ def new_scan(session_db, orchestrator):
         mode = ScanMode.RECON
         goal = _build_goal(mode, target)
 
+    divider("TOPOLOGY")
+    info(topology_selector_help(orchestrator.config.topology_dir))
+    topology_name = prompt("Topology [auto]: ") or "auto"
+
     divider("SCANNING")
     info(f"Target: {target}")
     info(f"Mode: {mode.value}")
+    info(f"Topology: {topology_name}")
     info(f"Goal: {goal[:80]}...")
 
     try:
-        result = orchestrator.run(goal=goal, target=target, mode=mode)
+        run_kwargs: dict[str, object] = {"goal": goal, "target": target, "mode": mode}
+        if topology_name and topology_name != "auto":
+            run_kwargs["topology_name"] = topology_name
+        result = orchestrator.run(**run_kwargs)
 
         # Check for orchestrator-level errors (e.g. scope)
         err = result.get("error") if isinstance(result, dict) else None
@@ -617,6 +636,15 @@ def main():
         default="",
         help="Natural language goal (required when --mode=custom)",
     )
+    parser.add_argument(
+        "--topology",
+        metavar="NAME_OR_PATH",
+        default="auto",
+        help=(
+            "Topology selector: auto, recon, full, weave, or a saved topology JSON "
+            "name/path (default: auto)"
+        ),
+    )
     args = parser.parse_args()
 
     session_db = SessionDB()
@@ -637,7 +665,12 @@ def main():
             error(f"Failed to initialize: {e}")
             sys.exit(1)
         run_scan_noninteractive(
-            session_db, orchestrator, target=args.scan, mode=mode, custom_goal=args.goal
+            session_db,
+            orchestrator,
+            target=args.scan,
+            mode=mode,
+            custom_goal=args.goal,
+            topology_name=args.topology,
         )
         return
 
