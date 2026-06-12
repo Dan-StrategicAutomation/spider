@@ -28,6 +28,12 @@ class GraphRunner(dspy.Module):
         self.node_modules = node_modules
         self.goal = self._normalize_goal(goal)
         self.progress_fn = kwargs.pop("progress_fn", lambda _s, _d="": None)
+
+        # Precompute O(1) lookups to avoid O(n) or O(n^2) sweeps in hot paths
+        self._node_by_id = {n.id: n for n in self.topology.nodes}
+        self._producer_by_output = {n.output: n.id for n in self.topology.nodes}
+        self._runtime_inputs_set = frozenset(self.topology.runtime_inputs)
+
         # Store normalized initial inputs (target_spec, constraints, etc.) for root nodes.
         self._initial_inputs = self._normalize_runtime_inputs(kwargs)
 
@@ -157,18 +163,16 @@ class GraphRunner(dspy.Module):
         """
         module = self.node_modules[node_id]
         input_fields, _ = self._get_signature_fields(module)
-        node_def = next(n for n in self.topology.nodes if n.id == node_id)
-        runtime_inputs = set(self.topology.runtime_inputs)
-        producer_by_output = {n.output: n.id for n in self.topology.nodes}
+        node_def = self._node_by_id[node_id]
 
         inputs = {}
 
         def is_available_source(source_name: str) -> bool:
             if source_name not in all_results:
                 return False
-            if source_name in runtime_inputs:
+            if source_name in self._runtime_inputs_set:
                 return True
-            producer_id = producer_by_output.get(source_name)
+            producer_id = self._producer_by_output.get(source_name)
             return producer_id is not None and producer_id in all_results
 
         # 1. Populate from explicit runtime inputs or completed upstream outputs.
@@ -228,12 +232,12 @@ class GraphRunner(dspy.Module):
         for wave in waves:
             # Map IDs to human names for cleaner logging
             wave_names = [
-                next((n.name for n in self.topology.nodes if n.id == nid), nid) for nid in wave
+                self._node_by_id[nid].name if nid in self._node_by_id else nid for nid in wave
             ]
             self.progress_fn("wave", f"Executing wave: {', '.join(wave_names)}")
 
             async def run_one(nid: str):
-                node_def = next(n for n in self.topology.nodes if n.id == nid)
+                node_def = self._node_by_id[nid]
                 self.progress_fn("node_running", f"  LLM running: {node_def.name}")
                 module = self.node_modules[nid]
 
@@ -246,7 +250,6 @@ class GraphRunner(dspy.Module):
 
                     result = await do_call()
                     all_results[nid] = result
-                    node_def = next(n for n in self.topology.nodes if n.id == nid)
 
                     # Robust output extraction
                     out_val = None
