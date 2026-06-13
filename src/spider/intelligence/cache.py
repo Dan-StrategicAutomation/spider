@@ -19,14 +19,19 @@ class SQLiteIntelligenceCache:
     def __init__(self, path: Path | str = DEFAULT_CACHE_PATH):
         self.path = Path(path).expanduser()
         self._lock = threading.RLock()
+        self._conn = None
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.path, timeout=30.0, check_same_thread=False)
+    def _get_conn(self) -> sqlite3.Connection:
+        # Expected performance impact: Reuses connection reducing connection overhead
+        # and preventing file descriptor leak.
+        if self._conn is None:
+            self._conn = sqlite3.connect(self.path, timeout=30.0, check_same_thread=False)
+        return self._conn
 
     def _initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._lock, self._connect() as conn:
+        with self._lock, self._get_conn() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(
                 """
@@ -50,7 +55,7 @@ class SQLiteIntelligenceCache:
     def get(self, source: str, cache_key: str) -> Any | None:
         """Return a cached JSON payload when present and not expired."""
         now = time.time()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._get_conn() as conn:
             row = conn.execute(
                 """
                 SELECT payload, expires_at
@@ -74,7 +79,7 @@ class SQLiteIntelligenceCache:
         """Store a JSON-serializable payload until the TTL expires."""
         now = time.time()
         expires_at = now + ttl_seconds
-        with self._lock, self._connect() as conn:
+        with self._lock, self._get_conn() as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO intelligence_cache
@@ -87,7 +92,7 @@ class SQLiteIntelligenceCache:
     def purge_expired(self) -> int:
         """Remove expired cache rows and return the number removed."""
         now = time.time()
-        with self._lock, self._connect() as conn:
+        with self._lock, self._get_conn() as conn:
             cursor = conn.execute(
                 "DELETE FROM intelligence_cache WHERE expires_at <= ?",
                 (now,),
