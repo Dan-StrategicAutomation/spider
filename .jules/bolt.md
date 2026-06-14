@@ -14,3 +14,7 @@
 ## 2024-03-08 - SQLite context manager behavior
 **Learning:** `with sqlite3.connect(...) as conn:` only manages the database transaction, not the connection closure. The connection remains open and must be explicitly closed via `.close()`. Failing to do so in high-frequency operations like cache queries leads to rapid file descriptor exhaustion (`sqlite3.OperationalError: unable to open database file`).
 **Action:** Always maintain a persistent `sqlite3.Connection` object instead of continuously reconnecting and discarding the reference, especially when wrapping SQLite into a cache interface.
+
+## 2024-06-14 - [Optimize KEV Catalog Lookups]
+**Learning:** Found an O(n) iteration bottleneck in `KEVClient.is_exploited` and `KEVClient.lookup`. Each method call was fetching the entire KEV catalog list (either via API or deserializing from SQLite cache) and iterating over all entries.
+**Action:** Introduced an instance-level method `_fetch_dict` that indexes the catalog by `cveID` once per `KEVClient` instance lifecycle, allowing O(1) hash map lookups. Next time I work with large list properties that are queried repeatedly, I will convert them into dictionaries early on.
