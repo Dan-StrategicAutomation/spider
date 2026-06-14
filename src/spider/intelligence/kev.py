@@ -37,9 +37,16 @@ class KEVClient:
         """Async-compatible KEV catalog fetch using a controlled executor."""
         return await self.repository.run_blocking(self._fetch)
 
+    def _fetch_dict(self) -> dict[str, Any]:
+        """Fetch and index KEV catalog by CVE ID."""
+        if not hasattr(self, "_cached_dict"):
+            entries = self._fetch()
+            self._cached_dict = {item.get("cveID", ""): item for item in entries if "cveID" in item}
+        return self._cached_dict
+
     def is_exploited(self, cve_id: str) -> bool:
         """Check if a CVE is in the KEV catalog (actively exploited in the wild)."""
-        return any(v.get("cveID") == cve_id for v in self._fetch())
+        return cve_id in self._fetch_dict()
 
     async def is_exploited_async(self, cve_id: str) -> bool:
         """Async-compatible KEV membership check using a controlled executor."""
@@ -47,16 +54,17 @@ class KEVClient:
 
     def lookup(self, cve_ids: list[str]) -> dict[str, dict[str, Any]]:
         """Return KEV metadata for the requested CVE IDs."""
-        requested = set(cve_ids)
-        return {
-            item.get("cveID", ""): {
-                "in_kev": True,
-                "due_date": item.get("dueDate", ""),
-                "short_description": item.get("shortDescription", ""),
-            }
-            for item in self._fetch()
-            if item.get("cveID", "") in requested
-        }
+        catalog = self._fetch_dict()
+        res = {}
+        for cve_id in cve_ids:
+            if cve_id in catalog:
+                item = catalog[cve_id]
+                res[cve_id] = {
+                    "in_kev": True,
+                    "due_date": item.get("dueDate", ""),
+                    "short_description": item.get("shortDescription", ""),
+                }
+        return res
 
     async def lookup_async(self, cve_ids: list[str]) -> dict[str, dict[str, Any]]:
         """Async-compatible KEV metadata lookup."""
