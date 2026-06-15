@@ -463,13 +463,19 @@ class SessionDB:
         self._conn = None
         self._init_db()
 
+    def close(self):
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
     def _get_conn(self):
         import sqlite3
 
         # ⚡ Bolt: Performance Improvement
         # Maintaining a persistent connection eliminates the I/O overhead of opening
         # and closing connections for every database query, improving CLI responsiveness.
-        # Expected Impact: Prevents file descriptor leak and reduces SQLite connection time by ~10-20ms per query.
+        # Expected Impact: Prevents file descriptor leak and reduces SQLite
+        # connection time by ~10-20ms per query.
         if self._conn is None:
             self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
             self._conn.row_factory = sqlite3.Row
@@ -623,9 +629,12 @@ def main():
         except Exception as e:
             error(f"Failed to initialize: {e}")
             sys.exit(1)
-        run_scan_noninteractive(
-            session_db, orchestrator, target=args.scan, mode=mode, custom_goal=args.goal
-        )
+        try:
+            run_scan_noninteractive(
+                session_db, orchestrator, target=args.scan, mode=mode, custom_goal=args.goal
+            )
+        finally:
+            session_db.close()
         return
 
     banner()
@@ -638,7 +647,10 @@ def main():
         sys.exit(1)
 
     success("Ready")
-    main_menu(session_db, config, orchestrator)
+    try:
+        main_menu(session_db, config, orchestrator)
+    finally:
+        session_db.close()
 
 
 if __name__ == "__main__":

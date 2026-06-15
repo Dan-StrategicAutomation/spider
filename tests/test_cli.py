@@ -12,6 +12,9 @@ class FakeSessionDB:
     def __init__(self):
         self.saved_results = []
 
+    def close(self):
+        pass
+
     def find_by_target(self, target: str) -> list[dict]:
         return []
 
