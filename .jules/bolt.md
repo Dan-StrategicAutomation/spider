@@ -14,3 +14,7 @@
 ## 2024-03-08 - SQLite context manager behavior
 **Learning:** `with sqlite3.connect(...) as conn:` only manages the database transaction, not the connection closure. The connection remains open and must be explicitly closed via `.close()`. Failing to do so in high-frequency operations like cache queries leads to rapid file descriptor exhaustion (`sqlite3.OperationalError: unable to open database file`).
 **Action:** Always maintain a persistent `sqlite3.Connection` object instead of continuously reconnecting and discarding the reference, especially when wrapping SQLite into a cache interface.
+
+## 2024-06-16 - [Optimize SQLite Connection in SessionDB]
+**Learning:** `SessionDB` in the CLI was opening and closing a new SQLite connection for every query. This is computationally expensive due to I/O overhead.
+**Action:** Always maintain a persistent `sqlite3.Connection` object instead of repeatedly recreating it. Added a `_get_conn` method and `check_same_thread=False` to safely handle connections.
