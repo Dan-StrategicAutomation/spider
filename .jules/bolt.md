@@ -14,3 +14,6 @@
 ## 2024-03-08 - SQLite context manager behavior
 **Learning:** `with sqlite3.connect(...) as conn:` only manages the database transaction, not the connection closure. The connection remains open and must be explicitly closed via `.close()`. Failing to do so in high-frequency operations like cache queries leads to rapid file descriptor exhaustion (`sqlite3.OperationalError: unable to open database file`).
 **Action:** Always maintain a persistent `sqlite3.Connection` object instead of continuously reconnecting and discarding the reference, especially when wrapping SQLite into a cache interface.
+## 2025-03-09 - SQLite Persistent Connection for CLI Sessions
+**Learning:** Repeatedly opening and closing SQLite connections causes significant I/O overhead and can lead to file descriptor leaks/exhaustion, especially during frequent database interactions (like updating session statuses or saving results in loops).
+**Action:** Use a persistent database connection pattern for local SQLite databases. Cache the connection object and reuse it, ensuring `check_same_thread=False` if thread safety is managed at the application level.
