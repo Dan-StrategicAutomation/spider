@@ -16,6 +16,20 @@ workarounds, no manual retry loops, no post-processing hacks.
 | `dspy.asyncify()` | Parallel wave execution |
 | `dspy.settings.context(temperature=X)` | Temperature control per node type |
 
+## Topology Selection
+
+SPIDER does not have to weave every graph. The orchestrator can select a
+topology from selectable sources before execution:
+
+1. `auto` uses prebuilt topologies for standard `recon` and `full` modes.
+2. `recon` or `full` explicitly selects one of the prebuilt topologies.
+3. A saved topology name/path loads a previously created `GraphTopology` JSON
+   from `SPIDER_TOPOLOGY_DIR` or an explicit file path.
+4. `weave` or `custom` invokes `GraphWeaver` for dynamic DSPy topology design.
+
+Every selected topology still passes deterministic mode filtering and topology
+contract validation before `GraphRunner` executes it.
+
 ## GraphWeaver
 
 The Weaver is a DSPy module that takes a pentest goal and produces a
