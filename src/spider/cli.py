@@ -458,15 +458,24 @@ class SessionDB:
     """SQLite session store for pentest results."""
 
     def __init__(self, db_path: str | Path | None = None):
-        self._db_path = Path(db_path) if db_path else Path.home() / ".spider" / "spider.db"
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_db()
-
-    def _init_db(self):
         import sqlite3
 
-        conn = sqlite3.connect(self._db_path)
-        c = conn.cursor()
+        self._db_path = Path(db_path) if db_path else Path.home() / ".spider" / "spider.db"
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # ⚡ Bolt: Maintain persistent connection to avoid file I/O overhead
+        # and prevent file descriptor exhaustion
+        self._conn = sqlite3.connect(self._db_path, timeout=30.0, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+
+        self._init_db()
+
+    def __del__(self):
+        if hasattr(self, "_conn") and self._conn:
+            self._conn.close()
+
+    def _init_db(self):
+        c = self._conn.cursor()
         c.executescript("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -478,69 +487,43 @@ class SessionDB:
                 goal TEXT DEFAULT ''
             );
         """)
-        conn.close()
+        self._conn.commit()
 
     def create_session(self, target: str) -> int:
-        import sqlite3
-
-        conn = sqlite3.connect(self._db_path)
-        c = conn.cursor()
+        c = self._conn.cursor()
         c.execute("INSERT INTO sessions (target, status) VALUES (?, 'active')", (target,))
-        conn.commit()
+        self._conn.commit()
         sid = c.lastrowid
-        conn.close()
         return sid
 
     def save_results(self, session_id: int, result):
-        import sqlite3
-
-        conn = sqlite3.connect(self._db_path)
-        c = conn.cursor()
+        c = self._conn.cursor()
         results_json = json.dumps(result, default=str)
         c.execute(
             "UPDATE sessions SET status='completed', findings=? WHERE id=?",
             (results_json, session_id),
         )
-        conn.commit()
-        conn.close()
+        self._conn.commit()
 
     def update_status(self, session_id: int, status: str):
-        import sqlite3
-
-        conn = sqlite3.connect(self._db_path)
-        c = conn.cursor()
+        c = self._conn.cursor()
         c.execute("UPDATE sessions SET status=? WHERE id=?", (status, session_id))
-        conn.commit()
-        conn.close()
+        self._conn.commit()
 
     def get_all_sessions(self) -> list[dict]:
-        import sqlite3
-
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
+        c = self._conn.cursor()
         c.execute("SELECT * FROM sessions ORDER BY id DESC")
         rows = [dict(r) for r in c.fetchall()]
-        conn.close()
         return rows
 
     def find_by_target(self, target: str) -> list[dict]:
-        import sqlite3
-
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
+        c = self._conn.cursor()
         c.execute("SELECT * FROM sessions WHERE target=?", (target,))
         rows = [dict(r) for r in c.fetchall()]
-        conn.close()
         return rows
 
     def get_session(self, session_id: int) -> dict | None:
-        import sqlite3
-
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
+        c = self._conn.cursor()
         c.execute("SELECT * FROM sessions WHERE id=?", (session_id,))
         row = c.fetchone()
         result = dict(row) if row else None
@@ -549,7 +532,6 @@ class SessionDB:
                 result["findings"] = json.loads(result["findings"])
             except json.JSONDecodeError:
                 result["findings"] = {}
-        conn.close()
         return result
 
 
