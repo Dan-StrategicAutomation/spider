@@ -14,3 +14,7 @@
 ## 2024-03-08 - SQLite context manager behavior
 **Learning:** `with sqlite3.connect(...) as conn:` only manages the database transaction, not the connection closure. The connection remains open and must be explicitly closed via `.close()`. Failing to do so in high-frequency operations like cache queries leads to rapid file descriptor exhaustion (`sqlite3.OperationalError: unable to open database file`).
 **Action:** Always maintain a persistent `sqlite3.Connection` object instead of continuously reconnecting and discarding the reference, especially when wrapping SQLite into a cache interface.
+
+## 2024-03-10 - Persistent SQLite Connections with Thread Locals
+**Learning:** The application (`SessionDB` and `SQLiteIntelligenceCache`) was repeatedly opening and closing SQLite connections per query, causing high I/O overhead and connection latency. Additionally, shared connections required locking and bypasses (`check_same_thread=False`).
+**Action:** Use `threading.local()` to maintain persistent, per-thread SQLite connections. This improves database performance, avoids file descriptor exhaustion, and removes concurrency/lock contention bottlenecks naturally.

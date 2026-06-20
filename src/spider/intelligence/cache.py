@@ -19,15 +19,16 @@ class SQLiteIntelligenceCache:
     def __init__(self, path: Path | str = DEFAULT_CACHE_PATH):
         self.path = Path(path).expanduser()
         self._lock = threading.RLock()
-        self._conn = None
+        self._local = threading.local()
         self._initialize()
 
     def _get_conn(self) -> sqlite3.Connection:
-        # Expected performance impact: Reuses connection reducing connection overhead
-        # and preventing file descriptor leak.
-        if self._conn is None:
-            self._conn = sqlite3.connect(self.path, timeout=30.0, check_same_thread=False)
-        return self._conn
+        # Expected performance impact: Reuses connection using thread-local storage,
+        # preventing file descriptor leak and avoiding lock contention on a shared
+        # connection without requiring check_same_thread=False.
+        if not hasattr(self._local, "conn"):
+            self._local.conn = sqlite3.connect(self.path, timeout=30.0)
+        return self._local.conn
 
     def _initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
