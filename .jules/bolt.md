@@ -18,3 +18,7 @@
 ## 2024-05-18 - SessionDB Connection Pooling
 **Learning:** The `SessionDB` class in `spider.cli` was opening and closing a new SQLite connection for every single database operation. This creates a significant performance bottleneck due to high I/O overhead and risks file descriptor exhaustion during fast loop operations.
 **Action:** Use thread-local storage (`threading.local()`) to maintain persistent `sqlite3.Connection` objects. This avoids the overhead of continuous connections/disconnections while remaining thread-safe. Set `PRAGMA journal_mode=WAL` on the persistent connection to ensure good concurrency. Set connection settings like `row_factory` only once during connection initialization.
+
+## 2024-05-18 - Pickling threading.local()
+**Learning:** Adding `threading.local()` to a class instance makes it unpicklable. If the class instances are passed between processes (e.g. via multiprocessing), the application will crash.
+**Action:** Always implement `__getstate__` and `__setstate__` to drop and recreate the `threading.local()` object during serialization when adding thread-local state to a class that might be pickled.

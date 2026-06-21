@@ -465,6 +465,18 @@ class SessionDB:
         self._local = threading.local()
         self._init_db()
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if "_local" in state:
+            del state["_local"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        import threading
+
+        self._local = threading.local()
+
     def _get_conn(self):
         import sqlite3
 
@@ -476,6 +488,11 @@ class SessionDB:
             self._local.conn.execute("PRAGMA journal_mode=WAL")
             self._local.conn.row_factory = sqlite3.Row
         return self._local.conn
+
+    def close(self):
+        if hasattr(self._local, "conn"):
+            self._local.conn.close()
+            del self._local.conn
 
     def _init_db(self):
         conn = self._get_conn()
