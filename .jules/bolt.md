@@ -14,3 +14,7 @@
 ## 2024-03-08 - SQLite context manager behavior
 **Learning:** `with sqlite3.connect(...) as conn:` only manages the database transaction, not the connection closure. The connection remains open and must be explicitly closed via `.close()`. Failing to do so in high-frequency operations like cache queries leads to rapid file descriptor exhaustion (`sqlite3.OperationalError: unable to open database file`).
 **Action:** Always maintain a persistent `sqlite3.Connection` object instead of continuously reconnecting and discarding the reference, especially when wrapping SQLite into a cache interface.
+
+## 2024-05-18 - SessionDB Connection Pooling
+**Learning:** The `SessionDB` class in `spider.cli` was opening and closing a new SQLite connection for every single database operation. This creates a significant performance bottleneck due to high I/O overhead and risks file descriptor exhaustion during fast loop operations.
+**Action:** Use thread-local storage (`threading.local()`) to maintain persistent `sqlite3.Connection` objects. This avoids the overhead of continuous connections/disconnections while remaining thread-safe. Set `PRAGMA journal_mode=WAL` on the persistent connection to ensure good concurrency. Set connection settings like `row_factory` only once during connection initialization.
