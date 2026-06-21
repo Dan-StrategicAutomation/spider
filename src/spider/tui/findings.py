@@ -33,6 +33,8 @@ class FindingsScreen(Screen):
     """Detailed findings view with CVE info and exploit options."""
 
     BINDINGS = [
+        ("up", "select_previous", "Previous finding"),
+        ("down", "select_next", "Next finding"),
         ("escape", "app.push_screen('dashboard')", "Back"),
     ]
 
@@ -69,6 +71,7 @@ class FindingsScreen(Screen):
             )
 
         table = Table(show_header=True, header_style="bold")
+        table.add_column("Selected", style=THEME.border_primary, justify="center")
         table.add_column("#", style=THEME.border_primary, justify="right")
         table.add_column("CVE")
         table.add_column("CVSS", justify="right")
@@ -85,7 +88,11 @@ class FindingsScreen(Screen):
             kev = "YES" if finding.get("in_kev") else "No"
             exploit = "YES" if finding.get("has_public_exploit") else "No"
             style = f"bold {style_for_severity(severity)}"
+            is_selected = idx == self._selected_index
+            marker = "▶" if is_selected else ""
+            row_style = "bold" if is_selected else None
             table.add_row(
+                marker,
                 str(idx),
                 cve_id,
                 f"{cvss:.1f}",
@@ -93,11 +100,12 @@ class FindingsScreen(Screen):
                 f"{epss:.2f}",
                 kev,
                 exploit,
+                style=row_style,
             )
 
         return Panel(
             table,
-            title=f"Findings ({len(self._session.findings)} total)",
+            title=f"Findings ({len(self._session.findings)} total) — ↑/↓ to select",
             border_style=THEME.border_primary,
         )
 
@@ -147,12 +155,23 @@ class FindingsScreen(Screen):
         """Select a finding by index for detail view."""
         if self._session and 0 <= index < len(self._session.findings):
             self._selected_index = index
+            self._refresh_finding_widgets()
+
+    def action_select_next(self) -> None:
+        """Move selection to the next finding."""
+        self.select_finding(self._selected_index + 1)
+
+    def action_select_previous(self) -> None:
+        """Move selection to the previous finding."""
+        self.select_finding(self._selected_index - 1)
+
+    def _refresh_finding_widgets(self) -> None:
+        """Refresh finding widgets when the screen is mounted."""
+        if self.is_mounted:
             self.query_one("#findings-list", Static).refresh()
             self.query_one("#finding-detail", Static).refresh()
 
     def update_session(self, session) -> None:
         """Update the session data."""
         self._session = session
-        if self.is_mounted:
-            self.query_one("#findings-list", Static).refresh()
-            self.query_one("#finding-detail", Static).refresh()
+        self._refresh_finding_widgets()
