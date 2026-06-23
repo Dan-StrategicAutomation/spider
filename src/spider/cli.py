@@ -460,26 +460,40 @@ class SessionDB:
     def __init__(self, db_path: str | Path | None = None):
         self._db_path = Path(db_path) if db_path else Path.home() / ".spider" / "spider.db"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = None
+        import threading
+
+        self._local = threading.local()
         self._init_db()
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop("_local", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        import threading
+
+        self._local = threading.local()
+
     def close(self):
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            conn.close()
+            self._local.conn = None
 
     def _get_conn(self):
         import sqlite3
 
         # ⚡ Bolt: Performance Improvement
-        # Maintaining a persistent connection eliminates the I/O overhead of opening
-        # and closing connections for every database query, improving CLI responsiveness.
+        # Using thread-local storage prevents SQLite 'database is locked' errors and serialization
+        # failures while safely maintaining persistent connections across threads.
         # Expected Impact: Prevents file descriptor leak and reduces SQLite
-        # connection time by ~10-20ms per query.
-        if self._conn is None:
-            self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
-            self._conn.row_factory = sqlite3.Row
-        return self._conn
+        # connection time by ~10-20ms per query without breaking picklability.
+        if getattr(self._local, "conn", None) is None:
+            self._local.conn = sqlite3.connect(self._db_path, check_same_thread=False)
+            self._local.conn.row_factory = sqlite3.Row
+        return self._local.conn
 
     def _init_db(self):
         conn = self._get_conn()

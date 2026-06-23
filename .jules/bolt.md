@@ -18,3 +18,7 @@
 ## 2024-06-16 - [Optimize SQLite Connection in SessionDB]
 **Learning:** `SessionDB` in the CLI was opening and closing a new SQLite connection for every query. This is computationally expensive due to I/O overhead.
 **Action:** Always maintain a persistent `sqlite3.Connection` object instead of repeatedly recreating it. Added a `_get_conn` method and `check_same_thread=False` to safely handle connections.
+
+## 2024-06-23 - [Pickling with Thread-Local State]
+**Learning:** Adding `threading.local()` for thread-local state to a class makes it unpicklable (`TypeError: cannot pickle 'sqlite3.Connection' object` or `TypeError: cannot pickle '_thread.RLock' object` when objects are wrapped by caching mechanisms or threading logic) because standard Python pickling can't handle live thread-local properties or locks.
+**Action:** When adding `threading.local()` or locks to a class instance for thread-local state or concurrency control, implement `__getstate__` and `__setstate__` to drop and recreate the thread-local objects (and locks) during serialization to ensure the class remains picklable.
